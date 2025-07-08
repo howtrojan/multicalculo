@@ -1,7 +1,9 @@
+// next.config.js
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Todas as outras configurações do Next.js (se houver) viriam aqui.
+  // A função `webpack` foi removida para compatibilidade com o Turbopack.
 };
 
 export default nextConfig;

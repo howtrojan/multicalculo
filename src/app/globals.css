@@ -1,15 +1,14 @@
-@import "tailwindcss";
+/* ESTAS SÃO AS TRÊS DIRETIVAS OFICIAIS PARA O TAILWIND CSS V3 */
+@tailwind base;      /* Inclui os estilos base (Preflight) e seus estilos base personalizados */
+@tailwind components; /* Inclui os estilos de componentes do Tailwind e seus componentes personalizados */
+@tailwind utilities; /* Inclui todas as classes utilitárias do Tailwind (inclusive suas customizadas) */
+
+
+/* Seus estilos CSS personalizados e variáveis podem vir abaixo */
 
 :root {
   --background: #ffffff;
   --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
 }
 
 @media (prefers-color-scheme: dark) {

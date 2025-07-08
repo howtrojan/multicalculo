@@ -116,7 +116,7 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-cyan-900 to-cyan-600 flex flex-col items-center py-10 px-2">
-      <div className="w-full max-w-5xl bg-white rounded-2xl shadow-2xl p-6 sm:p-10">
+      <div className="w-4/5 mx-auto bg-white rounded-2xl shadow-2xl p-6 sm:p-10">
         <div className="flex flex-col sm:flex-row justify-between items-center mb-8 gap-4">
           <h2 className="text-3xl font-bold text-cyan-900">Minhas Cotações</h2>
           <div className="flex gap-2">

@@ -286,9 +286,9 @@ export default function FormularioPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-cyan-900 to-cyan-600 flex flex-col items-center py-10">
-      <div className="w-full max-w-2xl bg-white rounded-xl shadow-lg p-8">
-        <h2 className="text-2xl font-bold text-cyan-900 mb-6">Formulário: Fiança Locatícia</h2>
+    <div className="min-h-screen bg-gradient-to-b from-cyan-900 to-cyan-600 flex items-center justify-center py-10">
+      <div className="w-4/5 mx-auto bg-white rounded-xl shadow-lg p-8">
+        <h2 className="text-2xl font-bold text-cyan-900 mb-6 text-center">Formulário: Fiança Locatícia</h2>
         <Formik
           initialValues={initialValues}
           validationSchema={validationSchema}
