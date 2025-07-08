@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
 import Logo from "../../../public/assets/logo.svg";
 import Image from 'next/image';
+import { toast } from "react-toastify";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -18,12 +19,33 @@ export default function LoginPage() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError("");
+    // Não precisa mais limpar o setError("") aqui
     try {
       await signInWithEmailAndPassword(auth, email, password);
+      // Exibir toast de sucesso
+      toast.success("Login realizado com sucesso!", {
+        position: "top-right",
+        autoClose: 5000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+        progress: undefined,
+        theme: "colored",
+      });
       router.push("/dashboard");
     } catch (err: any) {
-      setError("E-mail ou senha inválidos.");
+      // Exibir toast de erro
+      toast.error("E-mail ou senha inválidos. Tente novamente.", {
+        position: "top-right",
+        autoClose: 5000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+        progress: undefined,
+        theme: "colored",
+      });
     } finally {
       setLoading(false);
     }

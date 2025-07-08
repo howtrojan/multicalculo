@@ -105,8 +105,8 @@ export async function POST(req: NextRequest) {
 
     // Se não for sucesso, retorna erro real
     return NextResponse.json({ error: text }, { status: response.status });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Erro na API /api/fianca:", error);
-    return NextResponse.json({ error: error.message || "Erro interno ao processar a cotação." }, { status: 500 });
+    return NextResponse.json({ error: error || "Erro interno ao processar a cotação." }, { status: 500 });
   }
 }

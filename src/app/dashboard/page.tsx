@@ -12,26 +12,40 @@ const STATUS_OPTIONS = [
   "Emitida",
   "Recusada",
   "Cancelada",
-  "Pendente"
+  "Pendente",
 ];
 
 const STATUS_COLORS: Record<string, string> = {
   "Em análise": "bg-yellow-100 text-yellow-800 border-yellow-300",
-  "Aceita": "bg-green-100 text-green-800 border-green-300",
-  "Emitida": "bg-blue-100 text-blue-800 border-blue-300",
-  "Recusada": "bg-red-100 text-red-800 border-red-300",
-  "Cancelada": "bg-gray-200 text-gray-700 border-gray-300",
-  "Pendente": "bg-orange-100 text-orange-800 border-orange-300",
+  Aceita: "bg-green-100 text-green-800 border-green-300",
+  Emitida: "bg-blue-100 text-blue-800 border-blue-300",
+  Recusada: "bg-red-100 text-red-800 border-red-300",
+  Cancelada: "bg-gray-200 text-gray-700 border-gray-300",
+  Pendente: "bg-orange-100 text-orange-800 border-orange-300",
 };
 
 function formatDate(date: any) {
   if (!date) return "-";
   try {
-    if (typeof window === "undefined") return "-"; // só formata no client
-    if (typeof date === "string") return new Date(date).toLocaleDateString();
-    if (date.toDate) return date.toDate().toLocaleDateString();
-    return "-";
-  } catch {
+    if (typeof window === "undefined") return "-";
+
+    let d: Date;
+    if (typeof date === "string") {
+      d = new Date(date);
+    } else if (date.toDate) {
+      d = date.toDate();
+    } else {
+      return "-";
+    }
+
+    if (isNaN(d.getTime())) {
+      console.warn("Data inválida recebida para formatação:", date);
+      return "-";
+    }
+
+    return d.toLocaleString();
+  } catch (e) {
+    console.error("Erro ao formatar data:", e, "Data original:", date);
     return "-";
   }
 }
@@ -59,7 +73,10 @@ export default function DashboardPage() {
           orderBy("createdAt", "desc")
         );
         const querySnapshot = await getDocs(q);
-        const cotacoesList = querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        const cotacoesList = querySnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
         setCotacoes(cotacoesList);
         setLoading(false);
       }
@@ -115,61 +132,90 @@ export default function DashboardPage() {
   });
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-cyan-900 to-cyan-600 flex flex-col items-center py-10 px-2">
-      <div className="w-4/5 mx-auto bg-white rounded-2xl shadow-2xl p-6 sm:p-10">
+    <div className="min-h-screen bg-gradient-to-b from-secondary to-primary flex flex-col items-center py-10 px-2 justify-center">
+      <div
+        style={{ height: "80vh" }}
+        className="w-4/5 mx-auto bg-white rounded-2xl shadow-2xl p-6 sm:p-10 "
+      >
         <div className="flex flex-col sm:flex-row justify-between items-center mb-8 gap-4">
-          <h2 className="text-3xl font-bold text-cyan-900">Minhas Cotações</h2>
+          <h2 className="text-3xl font-bold text-primary">Minhas Cotações</h2>
           <div className="flex gap-2">
-            <button onClick={handleLogout} className="text-cyan-700 hover:underline text-sm">Sair</button>
-            <button onClick={() => router.push("/formulario")} className="bg-cyan-700 hover:bg-cyan-800 text-white font-semibold rounded px-4 py-2 transition-colors ml-2">Nova Cotação</button>
+            <button
+              onClick={handleLogout}
+              className="text-orange-600 hover:underline text-sm"
+            >
+              Sair
+            </button>
+            <button
+              onClick={() => router.push("/formulario")}
+              className="bg-primary hover:bg-secondary text-white font-semibold rounded px-4 py-2 transition-colors ml-2"
+            >
+              Nova Cotação
+            </button>
           </div>
         </div>
         <div className="flex flex-col sm:flex-row gap-4 mb-6 items-center">
           <input
             type="text"
             placeholder="Buscar por nome, status, ID, e-mail..."
-            className="flex-1 border border-cyan-300 rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+            className="flex-1 border border-primary rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-secondary"
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={(e) => setSearch(e.target.value)}
           />
           <select
-            className="border border-cyan-300 rounded px-4 py-2"
+            className="border border-primary rounded px-4 py-2"
             value={statusFilter}
-            onChange={e => setStatusFilter(e.target.value)}
+            onChange={(e) => setStatusFilter(e.target.value)}
           >
-            {STATUS_OPTIONS.map(opt => (
-              <option key={opt} value={opt}>{opt}</option>
+            {STATUS_OPTIONS.map((opt) => (
+              <option key={opt} value={opt}>
+                {opt}
+              </option>
             ))}
           </select>
           <input
             type="date"
-            className="border border-cyan-300 rounded px-4 py-2"
+            className="border border-primary rounded px-4 py-2"
             value={dateStart}
-            onChange={e => setDateStart(e.target.value)}
+            onChange={(e) => setDateStart(e.target.value)}
             title="Data inicial"
           />
           <input
             type="date"
-            className="border border-cyan-300 rounded px-4 py-2"
+            className="border border-primary rounded px-4 py-2"
             value={dateEnd}
-            onChange={e => setDateEnd(e.target.value)}
+            onChange={(e) => setDateEnd(e.target.value)}
             title="Data final"
           />
         </div>
-        <div className="overflow-x-auto rounded-lg border border-cyan-100">
+        <div className="overflow-x-auto rounded-lg border border-primary">
           {loading ? (
-            <div className="text-center text-cyan-700 py-8">Carregando cotações...</div>
+            <div className="text-center text-primary py-8">
+              Carregando cotações...
+            </div>
           ) : cotacoesFiltradas.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-cyan-700">
-              <span className="material-icons text-6xl mb-4 text-cyan-200">inbox</span>
-              <h3 className="text-xl font-semibold mb-2">Ainda não existem cotações</h3>
-              <p className="mb-4 text-cyan-500">Clique em <span className="font-bold">Nova Cotação</span> para criar sua primeira cotação!</p>
-              <button onClick={() => router.push("/formulario")} className="bg-cyan-700 hover:bg-cyan-800 text-white font-semibold rounded px-6 py-2 transition-colors">Nova Cotação</button>
+            <div className="flex flex-col items-center justify-center py-16 text-primary">
+              <span className="material-icons text-6xl mb-4 text-primary">
+                inbox
+              </span>
+              <h3 className="text-xl font-semibold mb-2">
+                Ainda não existem cotações
+              </h3>
+              <p className="mb-4 text-primary">
+                Clique em <span className="font-bold">Nova Cotação</span> para
+                criar sua primeira cotação!
+              </p>
+              <button
+                onClick={() => router.push("/formulario")}
+                className="bg-primary hover:bg-secondary text-white font-semibold rounded px-6 py-2 transition-colors"
+              >
+                Nova Cotação
+              </button>
             </div>
           ) : (
-            <table className="min-w-full text-sm text-cyan-900">
+            <table className="min-w-full text-sm text-secondary">
               <thead>
-                <tr className="bg-cyan-100">
+                <tr className="bg-primary/10">
                   <th className="px-4 py-2 text-left">ID</th>
                   <th className="px-4 py-2 text-left">Cliente</th>
                   <th className="px-4 py-2 text-left">Status</th>
@@ -179,19 +225,56 @@ export default function DashboardPage() {
               </thead>
               <tbody>
                 {cotacoesFiltradas.map((c) => (
-                  <tr className="border-b hover:bg-cyan-50 transition-colors" key={c.id}>
-                    <td className="px-4 py-2 font-mono text-xs sm:text-sm">{c.cotacao.quoteId || c.id}</td>
-                    <td className="px-4 py-2">{c.payload?.tenantName || '-'}</td>
+                  <tr
+                    className="border-b hover:bg-cyan-50 transition-colors"
+                    key={c.id}
+                  >
+                    <td className="px-4 py-2 font-mono text-xs sm:text-sm">
+                      {c.cotacao.quoteId || c.id}
+                    </td>
                     <td className="px-4 py-2">
-                      <span className={`inline-block px-2 py-1 rounded border text-xs font-semibold ${STATUS_COLORS[c.cotacao.status] || 'bg-gray-100 text-gray-700 border-gray-200'}`}>
-                        {c.cotacao.status || '-'}
+                      {c.cotacao?.tenantName || "-"}
+                    </td>
+                    <td className="px-4 py-2">
+                      <span
+                        className={`inline-block px-2 py-1 rounded border text-xs font-semibold ${
+                          STATUS_COLORS[c.cotacao.status] ||
+                          "bg-gray-100 text-gray-700 border-gray-200"
+                        }`}
+                      >
+                        {c.cotacao.status || "-"}
                       </span>
                     </td>
                     <td className="px-4 py-2">{formatDate(c.createdAt)}</td>
-                    <td className="px-4 py-2 flex gap-2 flex-wrap">
-                      <button onClick={() => handleVisualizar(c)} title="Visualizar" className="text-cyan-700 hover:underline text-xs flex items-center gap-1"><span className="material-icons text-base">visibility</span>Visualizar</button>
-                      <button onClick={() => handleVerDetalhes(c)} title="Detalhes" className="text-cyan-700 hover:underline text-xs flex items-center gap-1"><span className="material-icons text-base">info</span>Detalhes</button>
-                      <button onClick={() => handleRecalcular(c)} title="Recalcular" className="text-orange-600 hover:underline text-xs flex items-center gap-1"><span className="material-icons text-base">refresh</span>Recalcular</button>
+                    <td className="px-4 py-2 flex gap-6 items-center flex-wrap">
+                      <button
+                        onClick={() => handleVisualizar(c)}
+                        title="Visualizar"
+                        className="text-primary hover:text-secondary text-xs flex items-center gap-1"
+                      >
+                        <span className="material-icons text-base">
+                          visibility
+                        </span>
+                        Visualizar
+                      </button>
+                      <button
+                        onClick={() => handleVerDetalhes(c)}
+                        title="Detalhes"
+                        className="text-primary hover:text-secondary text-xs flex items-center gap-1"
+                      >
+                        <span className="material-icons text-base">info</span>
+                        Detalhes
+                      </button>
+                      <button
+                        onClick={() => handleRecalcular(c)}
+                        title="Recalcular"
+                        className="text-orange-600 hover:text-orange-900 text-xs flex items-center gap-1"
+                      >
+                        <span className="material-icons text-base">
+                          refresh
+                        </span>
+                        Recalcular
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -202,4 +285,4 @@ export default function DashboardPage() {
       </div>
     </div>
   );
-} 
+}

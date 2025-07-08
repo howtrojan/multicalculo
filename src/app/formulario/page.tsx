@@ -5,12 +5,12 @@ import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
 import axios from "axios";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
-import Input from "./Input";
-import InputCpfCnpj from "./InputCpfCnpj";
-import InputCep from "./InputCep";
-import InputDate from "./InputDate";
-import InputSelect from "./InputSelect";
-import InputCurrency from "./InputCurrency";
+import Input from "../../components/formulario/Input";
+import InputCpfCnpj from "../../components/formulario/InputCpfCnpj";
+import InputCep from "../../components/formulario/InputCep";
+import InputDate from "../../components/formulario/InputDate";
+import InputSelect from "../../components/formulario/InputSelect";
+import InputCurrency from "../../components/formulario/InputCurrency";
 import { Formik, Form } from "formik";
 import * as Yup from "yup";
 
@@ -366,8 +366,7 @@ export default function FormularioPage() {
                     label="CEP"
                     name="tenantZip"
                     value={values.tenantZip}
-                    onChange={(e) => setFieldValue("tenantZip", e.target.value)}
-                    onAddressFetched={handleTenantCep}
+                    onChange={(e) => setFieldValue("tenantZip", e.target.value)}                    
                     required
                   />
                   <Input label="Endereço" name="tenantAddress" value={values.tenantAddress} onChange={(e) => setFieldValue("tenantAddress", e.target.value)} required />

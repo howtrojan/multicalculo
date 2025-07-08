@@ -28,8 +28,8 @@ export default function CadastroPage() {
       await updateProfile(userCredential.user, { displayName: nome });
       setSuccess("Cadastro realizado com sucesso! Redirecionando para login...");
       setTimeout(() => router.push("/login"), 2000);
-    } catch (err: any) {
-      setError(err.message || "Erro ao cadastrar usuário.");
+    } catch (error: any) {
+      setError(error.message || "Erro ao cadastrar usuário.");
     } finally {
       setLoading(false);
     }
