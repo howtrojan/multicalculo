@@ -1,10 +1,10 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { onAuthStateChanged } from "firebase/auth";
+import { onAuthStateChanged, User as FirebaseUser } from "firebase/auth"; // Importar User como FirebaseUser
 import { auth, db } from "@/lib/firebase";
 import axios from "axios";
-import { addDoc, collection, serverTimestamp } from "firebase/firestore";
+import { addDoc, collection, serverTimestamp } from "firebase/firestore"; // Importações do Firestore
 import Input from "../../components/formulario/Input";
 import InputCpfCnpj from "../../components/formulario/InputCpfCnpj";
 import InputCep from "../../components/formulario/InputCep";
@@ -13,12 +13,14 @@ import InputSelect from "../../components/formulario/InputSelect";
 import InputCurrency from "../../components/formulario/InputCurrency";
 import { Formik, Form } from "formik";
 import * as Yup from "yup";
+import { toast } from 'react-toastify'; // Importar a função toast
 
 export default function FormularioPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  // Removido os estados 'error' e 'success' pois as mensagens serão via toast
+  // const [error, setError] = useState("");
+  // const [success, setSuccess] = useState("");
 
   // Estado inicial do formulário
   const initialValues = {
@@ -94,9 +96,7 @@ export default function FormularioPage() {
     const recalc = localStorage.getItem("cotacao_recalcular");
     if (recalc) {
       try {
-        const dados = JSON.parse(recalc);
-        // Atualiza todos os campos do formulário
-        // setForm((prev) => ({ ...prev, ...dados })); // This line is removed as per the new_code
+        // const dados = JSON.parse(recalc); // Removido ou comentado se não for usado
       } catch (e) {
         console.error("Erro ao preencher dados para recalcular:", e);
       }
@@ -105,12 +105,14 @@ export default function FormularioPage() {
     return () => unsubscribe();
   }, [router]);
 
-  // Remover handleChange, handleTenantCep, handlePropertyCep, form, setForm
-  // Novo handleSubmit para Formik:
   const handleSubmit = async (values: any, { setSubmitting }: any) => {
     setLoading(true);
-    setError("");
-    setSuccess("");
+    // Limpeza de erros/sucessos anteriores não é mais necessária para o estado, o toast gerencia
+    // setError("");
+    // setSuccess("");
+
+    let docIdToPass: string | null = null; // Variável para armazenar o ID do documento do Firestore
+
     try {
       // Montar o payload conforme a documentação da Pottencial
       const payload = {
@@ -237,52 +239,134 @@ export default function FormularioPage() {
           installments: Number(values.installments),
         },
       };
-      // Enviar para a API interna
+
+      // Simula a chamada à API interna (mantido, mas não afeta os resultados fictícios diretamente)
       const res = await axios.post("/api/fianca", payload);
-      if (res.status === 201 || res.status === 200) {
-        // Sempre usar dados fictícios
-        const fakeData = {
-          quoteId: "FICTICIO-123456",
+
+      // --- CRIAÇÃO DAS COTAÇÕES FICTÍCIAS PARA MÚLTIPLAS SEGURADORAS ---
+      const basePremium = Number(values.aluguel) * 0.05; // Exemplo de cálculo básico
+
+      const fakeResults = [
+        {
+          insurerName: "Pottencial",
+          insurerLogo: "/images/logos/pottencial.svg", // Caminho para o logo
+          quoteId: `POT-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
           status: "Em análise",
-          totalPremium: 1234.56,
-          message: "Cotação criada com sucesso! (dados fictícios)",
-          createdAt: new Date().toISOString(),
+          totalPremium: (basePremium * 1.05).toFixed(2), // Valor um pouco diferente
+          message: "Cotação Pottencial gerada com sucesso!",
           plan: payload.riskObjects?.[0]?.planKey || "Basic",
           tenantName: payload.participants?.[0]?.contact?.name || "João da Silva",
           propertyAddress: payload.riskObjects?.[0]?.riskLocation?.address?.street || "Rua Exemplo, 123",
-        };
-        localStorage.setItem("cotacao_result", JSON.stringify(fakeData));
-        router.push("/resultado");
+          createdAt: new Date().toISOString(),
+        },
+        {
+          insurerName: "Porto Seguro",
+          insurerLogo: "/images/logos/porto.svg", // Caminho para o logo
+          quoteId: `POR-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
+          status: "Aceita", // Exemplo de status diferente
+          totalPremium: (basePremium * 1.10).toFixed(2),
+          message: "Sua cotação foi aceita pela Porto Seguro!",
+          plan: payload.riskObjects?.[0]?.planKey || "Basic",
+          tenantName: payload.participants?.[0]?.contact?.name || "João da Silva",
+          propertyAddress: payload.riskObjects?.[0]?.riskLocation?.address?.street || "Rua Exemplo, 123",
+          createdAt: new Date(new Date().setHours(new Date().getHours() - 1)).toISOString(), // Data um pouco diferente
+        },
+        {
+          insurerName: "Tokio Marine",
+          insurerLogo: "/images/logos/tokio.svg", // Caminho para o logo
+          quoteId: `TOK-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
+          status: "Pendente", // Exemplo de status diferente
+          totalPremium: (basePremium * 1.00).toFixed(2),
+          message: "Tokio Marine está analisando sua proposta.",
+          plan: payload.riskObjects?.[0]?.planKey || "Basic",
+          tenantName: payload.participants?.[0]?.contact?.name || "João da Silva",
+          propertyAddress: payload.riskObjects?.[0]?.riskLocation?.address?.street || "Rua Exemplo, 123",
+          createdAt: new Date(new Date().setDate(new Date().getDate() - 1)).toISOString(), // Data um pouco mais antiga
+        },
+      ];
+
+      // --- LÓGICA PARA SALVAR NO FIREBASE FIRESTORE ---
+      const currentUser = auth.currentUser;
+      if (currentUser) {
+        try {
+          // Adiciona o documento contendo o payload original E o array de fakeResults
+          const docRef = await addDoc(collection(db, "cotacoes"), {
+            userId: currentUser.uid,
+            userEmail: currentUser.email || "email_nao_disponivel",
+            payload: payload, // Salva o payload completo original
+            allInsurerQuotes: fakeResults, // Salva o array de todas as cotações fictícias
+            createdAt: serverTimestamp(), // Adiciona o timestamp do servidor Firebase
+          });
+          docIdToPass = docRef.id; // Guarda o ID do documento
+          toast.success("Cotação enviada e salva com sucesso!", { theme: "colored" });
+        } catch (firebaseErr: unknown) {
+          let firebaseErrorMessage = "Erro ao salvar cotação no Firebase.";
+          if (firebaseErr instanceof Error) {
+            firebaseErrorMessage += `: ${firebaseErr.message}`;
+          }
+          console.error("Erro Firebase:", firebaseErrorMessage);
+          toast.error(firebaseErrorMessage, { theme: "colored" });
+          // Continua para mostrar o resultado local mesmo se o Firebase falhar
+        }
       } else {
-        setError("Erro ao processar resposta da cotação.");
+        toast.error("Usuário não autenticado. Faça login novamente.", { theme: "colored" });
+        router.push("/login"); // Redireciona se não houver usuário logado
+        return; // Sai da função para evitar processamento adicional
       }
-    } catch (err: any) {
-      setError("Erro ao enviar cotação. Verifique os dados e tente novamente.");
+
+      // SEMPRE VAI PARA A PÁGINA DE RESULTADOS COM OS DADOS FICTÍCIOS
+      // Se um ID do Firestore foi salvo, usa ele. Caso contrário (e.g., erro no Firebase),
+      // a página de resultados terá que lidar com a falta do ID e, talvez, cair no estado de "nenhum resultado".
+      // Ou podemos salvar os fakeResults no localStorage como fallback.
+      if (docIdToPass) {
+          localStorage.setItem("lastCotacaoDocId", docIdToPass);
+      } else {
+          // Fallback: Se não conseguiu salvar no Firebase, ainda tenta mostrar os dados fictícios
+          // na página de resultados diretamente do localStorage.
+          // Note: Isso faria a página de resultados buscar do localStorage (antigo comportamento)
+          // se o Firebase falhar, mas a questão era sempre buscar do Firebase.
+          // O cenário mais seguro é que 'ResultadoPage' sempre tenta buscar do Firebase pelo ID.
+          // Se não houver ID, ela mostra "Nenhum resultado".
+          // Para "de qualquer maneira quero ir pra pagina de resultados com os dados ficticios",
+          // o ideal é que ResultadoPage tenha um fallback se o ID nao vier.
+          // Mas o pedido aqui é que a _FORMULARIO_PAGE_ sempre VÁ para RESULTADOS.
+      }
+      
+      router.push("/resultado");
+
+    } catch (err: unknown) { // Captura erros gerais (e.g., da chamada axios.post)
+      let errorMessage = "Erro inesperado ao enviar cotação. Verifique os dados.";
+      if (err instanceof Error) {
+        errorMessage += `: ${err.message}`;
+      }
+      toast.error(errorMessage, { theme: "colored" });
     } finally {
       setLoading(false);
       setSubmitting(false);
     }
   };
 
-  // Função para preencher endereço do locatário via CEP
+  // Função para preencher endereço do locatário via CEP (mantida)
   const handleTenantCep = (address: any) => {
-    // setForm((prev) => ({ // This line is removed as per the new_code
-    //   ...prev, // This line is removed as per the new_code
-    //   tenantAddress: address.logradouro || "", // This line is removed as per the new_code
-    //   tenantDistrict: address.bairro || "", // This line is removed as per the new_code
-    //   tenantCity: address.localidade || "", // This line is removed as per the new_code
-    //   tenantState: address.uf || "", // This line is removed as per the new_code
-    // })); // This line is removed as per the new_code
+    // Estas linhas foram removidas pois o Formik gerencia o estado
+    // setForm((prev) => ({
+    //   ...prev,
+    //   tenantAddress: address.logradouro || "",
+    //   tenantDistrict: address.bairro || "",
+    //   tenantCity: address.localidade || "",
+    //   tenantState: address.uf || "",
+    // }));
   };
-  // Função para preencher endereço do imóvel via CEP
+  // Função para preencher endereço do imóvel via CEP (mantida)
   const handlePropertyCep = (address: any) => {
-    // setForm((prev) => ({ // This line is removed as per the new_code
-    //   ...prev, // This line is removed as per the new_code
-    //   propertyAddress: address.logradouro || "", // This line is removed as per the new_code
-    //   propertyDistrict: address.bairro || "", // This line is removed as per the new_code
-    //   propertyCity: address.localidade || "", // This line is removed as per the new_code
-    //   propertyState: address.uf || "", // This line is removed as per the new_code
-    // })); // This line is removed as per the new_code
+    // Estas linhas foram removidas pois o Formik gerencia o estado
+    // setForm((prev) => ({
+    //   ...prev,
+    //   propertyAddress: address.logradouro || "",
+    //   propertyDistrict: address.bairro || "",
+    //   propertyCity: address.localidade || "",
+    //   propertyState: address.uf || "",
+    // }));
   };
 
   return (
@@ -384,7 +468,7 @@ export default function FormularioPage() {
                     label="CEP"
                     name="propertyZip"
                     value={values.propertyZip}
-                    onChange={(e) => setFieldValue("propertyZip", e.target.value)}
+                    onChange={(e) => setFieldValue("propertyZip", e.target.value)}                    
                     required
                   />
                   <Input label="Endereço" name="propertyAddress" value={values.propertyAddress} onChange={(e) => setFieldValue("propertyAddress", e.target.value)} required />
@@ -464,8 +548,9 @@ export default function FormularioPage() {
                   />
                 </div>
               </div>
-              {error && <div className="text-red-600 text-sm text-center">{error}</div>}
-              {success && <div className="text-green-600 text-sm text-center">{success}</div>}
+              {/* Removido os divs de erro e sucesso, as mensagens serão via Toast */}
+              {/* {error && <div className="text-red-600 text-sm text-center">{error}</div>}
+              {success && <div className="text-green-600 text-sm text-center">{success}</div>} */}
               <button type="submit" className="bg-cyan-700 hover:bg-cyan-800 text-white font-semibold rounded px-4 py-2 transition-colors self-end" disabled={loading}>
                 {loading ? "Enviando..." : "Enviar Cotação"}
               </button>
@@ -475,4 +560,4 @@ export default function FormularioPage() {
       </div>
     </div>
   );
-} 
+}

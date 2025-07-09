@@ -1,9 +1,33 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { onAuthStateChanged, signOut } from "firebase/auth";
+import { onAuthStateChanged, signOut, User as FirebaseUser } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
-import { collection, query, where, getDocs, orderBy } from "firebase/firestore";
+import { collection, query, where, getDocs, orderBy, Timestamp } from "firebase/firestore";
+
+// --- Interfaces de Tipagem ---
+interface InsurerQuote {
+  insurerName: string;
+  insurerLogo: string;
+  quoteId: string;
+  status: string;
+  totalPremium: string;
+  message?: string;
+  plan?: string;
+  tenantName?: string;
+  propertyAddress?: string;
+  createdAt?: string;
+}
+
+interface DashboardCotacaoDoc {
+  id: string;
+  userId: string;
+  userEmail?: string;
+  payload: any;
+  cotacao: InsurerQuote; // O resultado da Pottencial
+  allInsurerQuotes?: InsurerQuote[]; // O array opcional com as 3 seguradoras
+  createdAt: Timestamp;
+}
 
 const STATUS_OPTIONS = [
   "Todos",
@@ -24,7 +48,7 @@ const STATUS_COLORS: Record<string, string> = {
   Pendente: "bg-orange-100 text-orange-800 border-orange-300",
 };
 
-function formatDate(date: any) {
+function formatDate(date: Timestamp | string | undefined): string {
   if (!date) return "-";
   try {
     if (typeof window === "undefined") return "-";
@@ -32,7 +56,7 @@ function formatDate(date: any) {
     let d: Date;
     if (typeof date === "string") {
       d = new Date(date);
-    } else if (date.toDate) {
+    } else if (date instanceof Timestamp) {
       d = date.toDate();
     } else {
       return "-";
@@ -52,8 +76,8 @@ function formatDate(date: any) {
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [user, setUser] = useState<any>(null);
-  const [cotacoes, setCotacoes] = useState<any[]>([]);
+  const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [cotacoes, setCotacoes] = useState<DashboardCotacaoDoc[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("Todos");
@@ -61,21 +85,20 @@ export default function DashboardPage() {
   const [dateEnd, setDateEnd] = useState("");
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (!user) {
+    const unsubscribe = onAuthStateChanged(auth, async (_user) => {
+      if (!_user) {
         router.push("/login");
       } else {
-        setUser(user);
-        // Buscar cotações do usuário
+        setUser(_user);
         const q = query(
           collection(db, "cotacoes"),
-          where("userId", "==", user.uid),
+          where("userId", "==", _user.uid),
           orderBy("createdAt", "desc")
         );
         const querySnapshot = await getDocs(q);
-        const cotacoesList = querySnapshot.docs.map((doc) => ({
+        const cotacoesList: DashboardCotacaoDoc[] = querySnapshot.docs.map((doc) => ({
           id: doc.id,
-          ...doc.data(),
+          ...(doc.data() as Omit<DashboardCotacaoDoc, 'id'>)
         }));
         setCotacoes(cotacoesList);
         setLoading(false);
@@ -89,43 +112,52 @@ export default function DashboardPage() {
     router.push("/login");
   };
 
-  const handleVerDetalhes = (cotacao: any) => {
-    localStorage.setItem("cotacao_result", JSON.stringify(cotacao.cotacao));
+  const handleVerDetalhes = (cotacao: DashboardCotacaoDoc) => {
+    localStorage.setItem("lastCotacaoDocId", cotacao.id);
     router.push("/resultado");
   };
 
-  const handleRecalcular = (cotacao: any) => {
+  const handleRecalcular = (cotacao: DashboardCotacaoDoc) => {
     localStorage.setItem("cotacao_recalcular", JSON.stringify(cotacao.payload));
     router.push("/formulario");
   };
 
-  const handleVisualizar = (cotacao: any) => {
-    localStorage.setItem("cotacao_result", JSON.stringify(cotacao.cotacao));
+  const handleVisualizar = (cotacao: DashboardCotacaoDoc) => {
+    localStorage.setItem("lastCotacaoDocId", cotacao.id);
     router.push("/resultado");
   };
 
-  // Filtro e busca
+  // Filtro e busca ajustados para incluir nomes das seguradoras no filtro de busca
   const cotacoesFiltradas = cotacoes.filter((c) => {
     const busca = search.toLowerCase();
-    const nome = c.payload?.tenantName?.toLowerCase() || "";
-    const id = (c.cotacao.quoteId || c.id || "").toLowerCase();
-    const email = c.userEmail?.toLowerCase() || "";
-    const status = (c.cotacao.status || "").toLowerCase();
+    const nomeLocatario = (c.payload?.tenantName || c.cotacao?.tenantName || "").toLowerCase();
+    const idCotacao = (c.cotacao?.quoteId || c.id || "").toLowerCase();
+    const emailUsuario = (c.userEmail || "").toLowerCase();
+    const statusCotacao = (c.cotacao?.status || "").toLowerCase();
+
+    // Novo: Nomes das seguradoras no array allInsurerQuotes
+    const insurerNames = c.allInsurerQuotes
+      ? c.allInsurerQuotes.map(iq => iq.insurerName.toLowerCase()).join(' ')
+      : '';
+
     const matchBusca =
-      nome.includes(busca) ||
-      id.includes(busca) ||
-      email.includes(busca) ||
-      status.includes(busca);
+      nomeLocatario.includes(busca) ||
+      idCotacao.includes(busca) ||
+      emailUsuario.includes(busca) ||
+      statusCotacao.includes(busca) ||
+      insurerNames.includes(busca); // Inclui a busca pelos nomes das seguradoras
+
     const matchStatus =
       statusFilter === "Todos" ||
-      (c.cotacao.status || "").toLowerCase() === statusFilter.toLowerCase();
+      statusCotacao === statusFilter.toLowerCase();
+
     let matchData = true;
     if (dateStart) {
-      const dataCotacao = c.createdAt?.toDate ? c.createdAt.toDate() : null;
+      const dataCotacao = c.createdAt instanceof Timestamp ? c.createdAt.toDate() : null;
       if (dataCotacao && new Date(dateStart) > dataCotacao) matchData = false;
     }
     if (dateEnd) {
-      const dataCotacao = c.createdAt?.toDate ? c.createdAt.toDate() : null;
+      const dataCotacao = c.createdAt instanceof Timestamp ? c.createdAt.toDate() : null;
       if (dataCotacao && new Date(dateEnd) < dataCotacao) matchData = false;
     }
     return matchBusca && matchStatus && matchData;
@@ -157,7 +189,7 @@ export default function DashboardPage() {
         <div className="flex flex-col sm:flex-row gap-4 mb-6 items-center">
           <input
             type="text"
-            placeholder="Buscar por nome, status, ID, e-mail..."
+            placeholder="Buscar por nome, status, ID, e-mail, seguradora..." // Atualizado placeholder
             className="flex-1 border border-primary rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-secondary"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -216,36 +248,54 @@ export default function DashboardPage() {
             <table className="min-w-full text-sm text-secondary">
               <thead>
                 <tr className="bg-primary/10">
-                  <th className="px-4 py-2 text-left">ID</th>
-                  <th className="px-4 py-2 text-left">Cliente</th>
-                  <th className="px-4 py-2 text-left">Status</th>
-                  <th className="px-4 py-2 text-left">Data</th>
-                  <th className="px-4 py-2 text-left">Ações</th>
+                  <th className="px-4 py-2 text-left text-primary">ID</th>
+                  <th className="px-4 py-2 text-left text-primary">Cliente</th>
+                  <th className="px-4 py-2 text-left text-primary">Status</th>
+                  <th className="px-4 py-2 text-left text-primary">Data</th>
+                  <th className="px-4 py-2 text-left text-primary">Ações</th>
                 </tr>
               </thead>
               <tbody>
                 {cotacoesFiltradas.map((c) => (
                   <tr
-                    className="border-b hover:bg-cyan-50 transition-colors"
+                    className="border-b hover:bg-primary/5 transition-colors"
                     key={c.id}
                   >
-                    <td className="px-4 py-2 font-mono text-xs sm:text-sm">
-                      {c.cotacao.quoteId || c.id}
+                    <td className="px-4 py-2 font-mono text-xs sm:text-sm text-primary">
+                      {c.cotacao?.quoteId || c.id}
                     </td>
-                    <td className="px-4 py-2">
-                      {c.cotacao?.tenantName || "-"}
+                    {/* Alterado para listar as seguradoras se houver mais de uma, ou o nome do locatário */}
+                    <td className="px-4 py-2 text-primary">
+                      {c.payload.participants[0].contact.name || "-"}
                     </td>
-                    <td className="px-4 py-2">
-                      <span
-                        className={`inline-block px-2 py-1 rounded border text-xs font-semibold ${
-                          STATUS_COLORS[c.cotacao.status] ||
-                          "bg-gray-100 text-gray-700 border-gray-200"
-                        }`}
-                      >
-                        {c.cotacao.status || "-"}
-                      </span>
+                     <td className="px-4 py-2">
+                      {c.allInsurerQuotes && c.allInsurerQuotes.length > 0 ? (
+                        <div className="flex gap-1 items-start"> {/* Flex-col para empilhar, items-start para alinhar à esquerda */}
+                          {c.allInsurerQuotes.map((insurer, idx) => (
+                            <span
+                              key={idx} 
+                              className={`inline-block px-2 py-1 gap-1 flex rounded border text-xs font-semibold ${
+                                STATUS_COLORS[insurer.status] || "bg-gray-100 text-gray-700 border-gray-200"
+                              }`}
+                            >
+                              
+                              {insurer.insurerName}. {insurer.status} 
+                            </span>
+                          ))}
+                        </div>
+                      ) : (                        
+                        <span
+                          className={`inline-block px-2 py-1 rounded border text-xs font-semibold ${
+                            STATUS_COLORS[c.cotacao?.status || ''] || "bg-gray-100 text-gray-700 border-gray-200"
+                          }`}
+                        >
+                          {c.cotacao?.status || "N/A"}
+                        </span>
+                      )}
                     </td>
-                    <td className="px-4 py-2">{formatDate(c.createdAt)}</td>
+                    <td className="px-4 py-2 text-primary">
+                      {formatDate(c.createdAt)}
+                    </td>
                     <td className="px-4 py-2 flex gap-6 items-center flex-wrap">
                       <button
                         onClick={() => handleVisualizar(c)}
