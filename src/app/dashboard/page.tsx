@@ -1,11 +1,31 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { onAuthStateChanged, signOut, User as FirebaseUser } from "firebase/auth";
-import { auth, db } from "@/lib/firebase";
-import { collection, query, where, getDocs, orderBy, Timestamp } from "firebase/firestore";
+import { onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
+import { auth, db } from "@/lib/firebase"; // Mantém auth e db para a lógica de dados
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  orderBy,
+  Timestamp,
+} from "firebase/firestore";
+// REMOVA ESTES IMPORTS, POIS ELES AGORA PERTENCEM AO DashboardLayout
+// import Image from "next/image";
+// import Logo from "../../../public/assets/logo.svg";
+// import { FaSearch } from "react-icons/fa"; // FaSearch também sai daqui
 
-// --- Interfaces de Tipagem ---
+// MANTENHA SOMENTE OS ÍCONES QUE SÃO USADOS NA TABELA
+import {
+  FaEye,
+  FaSyncAlt,
+  FaInfoCircle,
+  FaChevronLeft,
+  FaChevronRight,
+} from "react-icons/fa";
+
+// --- Interfaces de Tipagem (Mantenha inalteradas) ---
 interface InsurerQuote {
   insurerName: string;
   insurerLogo: string;
@@ -24,8 +44,8 @@ interface DashboardCotacaoDoc {
   userId: string;
   userEmail?: string;
   payload: any;
-  cotacao: InsurerQuote; // O resultado da Pottencial
-  allInsurerQuotes?: InsurerQuote[]; // O array opcional com as 3 seguradoras
+  cotacao: InsurerQuote;
+  allInsurerQuotes?: InsurerQuote[];
   createdAt: Timestamp;
 }
 
@@ -67,7 +87,13 @@ function formatDate(date: Timestamp | string | undefined): string {
       return "-";
     }
 
-    return d.toLocaleString();
+    const day = String(d.getDate()).padStart(2, "0");
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const year = d.getFullYear();
+    const hours = String(d.getHours()).padStart(2, "0");
+    const minutes = String(d.getMinutes()).padStart(2, "0");
+
+    return `${day}/${month}/${year} ${hours}:${minutes}`;
   } catch (e) {
     console.error("Erro ao formatar data:", e, "Data original:", date);
     return "-";
@@ -79,12 +105,14 @@ export default function DashboardPage() {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [cotacoes, setCotacoes] = useState<DashboardCotacaoDoc[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(""); // Este `search` agora é para o filtro LOCAL da tabela
   const [statusFilter, setStatusFilter] = useState("Todos");
   const [dateStart, setDateStart] = useState("");
   const [dateEnd, setDateEnd] = useState("");
+  const [timeFilter, setTimeFilter] = useState("Todos");
 
   useEffect(() => {
+    // A importação de `auth` é necessária aqui para `onAuthStateChanged`
     const unsubscribe = onAuthStateChanged(auth, async (_user) => {
       if (!_user) {
         router.push("/login");
@@ -96,10 +124,12 @@ export default function DashboardPage() {
           orderBy("createdAt", "desc")
         );
         const querySnapshot = await getDocs(q);
-        const cotacoesList: DashboardCotacaoDoc[] = querySnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...(doc.data() as Omit<DashboardCotacaoDoc, 'id'>)
-        }));
+        const cotacoesList: DashboardCotacaoDoc[] = querySnapshot.docs.map(
+          (doc) => ({
+            id: doc.id,
+            ...(doc.data() as Omit<DashboardCotacaoDoc, "id">),
+          })
+        );
         setCotacoes(cotacoesList);
         setLoading(false);
       }
@@ -107,10 +137,8 @@ export default function DashboardPage() {
     return () => unsubscribe();
   }, [router]);
 
-  const handleLogout = async () => {
-    await signOut(auth);
-    router.push("/login");
-  };
+  // `handleLogout` foi movido para `DashboardLayout` e não é mais necessário aqui.
+  // const handleLogout = async () => { ... };
 
   const handleVerDetalhes = (cotacao: DashboardCotacaoDoc) => {
     localStorage.setItem("lastCotacaoDocId", cotacao.id);
@@ -127,204 +155,301 @@ export default function DashboardPage() {
     router.push("/resultado");
   };
 
-  // Filtro e busca ajustados para incluir nomes das seguradoras no filtro de busca
+  const applyTimeFilter = (filter: string) => {
+    setTimeFilter(filter);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    let startDate = "";
+    let endDate = "";
+
+    if (filter === "Hoje") {
+      startDate = today.toISOString().split("T")[0];
+      endDate = today.toISOString().split("T")[0];
+    } else if (filter === "7 Dias") {
+      const sevenDaysAgo = new Date(today);
+      sevenDaysAgo.setDate(today.getDate() - 7);
+      startDate = sevenDaysAgo.toISOString().split("T")[0];
+      endDate = today.toISOString().split("T")[0];
+    } else if (filter === "15 Dias") {
+      const fifteenDaysAgo = new Date(today);
+      fifteenDaysAgo.setDate(today.getDate() - 15);
+      startDate = fifteenDaysAgo.toISOString().split("T")[0];
+      endDate = today.toISOString().split("T")[0];
+    } else if (filter === "30 Dias") {
+      const thirtyDaysAgo = new Date(today);
+      thirtyDaysAgo.setDate(today.getDate() - 30);
+      startDate = thirtyDaysAgo.toISOString().split("T")[0];
+      endDate = today.toISOString().split("T")[0];
+    }
+
+    setDateStart(startDate);
+    setDateEnd(endDate);
+  };
+
   const cotacoesFiltradas = cotacoes.filter((c) => {
+    // Este `busca` refere-se ao estado local da DashboardPage,
+    // não à barra de busca do header (que é global).
     const busca = search.toLowerCase();
-    const nomeLocatario = (c.payload?.tenantName || c.cotacao?.tenantName || "").toLowerCase();
+    const clientName = (
+      c.payload?.client?.name ||
+      c.payload?.participants?.[0]?.contact?.name ||
+      ""
+    ).toLowerCase();
+    const clientCpf = (
+      c.payload?.client?.document ||
+      c.payload?.participants?.[0]?.contact?.document ||
+      ""
+    ).toLowerCase();
+    const clientAddress = (
+      c.payload?.property?.address
+        ? `${c.payload.property.address.street}, ${
+            c.payload.property.address.number || ""
+          }, ${c.payload.property.address.neighborhood}, ${
+            c.payload.property.address.city
+          }/${c.payload.property.address.state}`
+        : ""
+    ).toLowerCase();
+
     const idCotacao = (c.cotacao?.quoteId || c.id || "").toLowerCase();
     const emailUsuario = (c.userEmail || "").toLowerCase();
     const statusCotacao = (c.cotacao?.status || "").toLowerCase();
 
-    // Novo: Nomes das seguradoras no array allInsurerQuotes
     const insurerNames = c.allInsurerQuotes
-      ? c.allInsurerQuotes.map(iq => iq.insurerName.toLowerCase()).join(' ')
-      : '';
+      ? c.allInsurerQuotes.map((iq) => iq.insurerName.toLowerCase()).join(" ")
+      : "";
 
     const matchBusca =
-      nomeLocatario.includes(busca) ||
+      clientName.includes(busca) ||
+      clientCpf.includes(busca) ||
+      clientAddress.includes(busca) ||
       idCotacao.includes(busca) ||
       emailUsuario.includes(busca) ||
       statusCotacao.includes(busca) ||
-      insurerNames.includes(busca); // Inclui a busca pelos nomes das seguradoras
+      insurerNames.includes(busca);
 
     const matchStatus =
-      statusFilter === "Todos" ||
-      statusCotacao === statusFilter.toLowerCase();
+      statusFilter === "Todos" || statusCotacao === statusFilter.toLowerCase();
 
     let matchData = true;
     if (dateStart) {
-      const dataCotacao = c.createdAt instanceof Timestamp ? c.createdAt.toDate() : null;
+      const dataCotacao =
+        c.createdAt instanceof Timestamp ? c.createdAt.toDate() : null;
       if (dataCotacao && new Date(dateStart) > dataCotacao) matchData = false;
     }
     if (dateEnd) {
-      const dataCotacao = c.createdAt instanceof Timestamp ? c.createdAt.toDate() : null;
-      if (dataCotacao && new Date(dateEnd) < dataCotacao) matchData = false;
+      const dataCotacao =
+        c.createdAt instanceof Timestamp ? c.createdAt.toDate() : null;
+      const endDatePlusOneDay = new Date(dateEnd);
+      endDatePlusOneDay.setDate(endDatePlusOneDay.getDate() + 1);
+      endDatePlusOneDay.setMilliseconds(
+        endDatePlusOneDay.getMilliseconds() - 1
+      );
+      if (dataCotacao && dataCotacao > endDatePlusOneDay) matchData = false;
     }
     return matchBusca && matchStatus && matchData;
   });
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-secondary to-primary flex flex-col items-center py-10 px-2 justify-center">
-      <div
-        style={{ height: "80vh" }}
-        className="w-4/5 mx-auto bg-white rounded-2xl shadow-2xl p-6 sm:p-10 "
-      >
-        <div className="flex flex-col sm:flex-row justify-between items-center mb-8 gap-4">
-          <h2 className="text-3xl font-bold text-primary">Minhas Cotações</h2>
-          <div className="flex gap-2">
-            <button
-              onClick={handleLogout}
-              className="text-orange-600 hover:underline text-sm"
-            >
-              Sair
-            </button>
-            <button
-              onClick={() => router.push("/formulario")}
-              className="bg-primary hover:bg-secondary text-white font-semibold rounded px-4 py-2 transition-colors ml-2"
-            >
-              Nova Cotação
-            </button>
+    // Removido o div pai `flex flex-col min-h-screen bg-gray-100`
+    // Removido o <header>
+    <main className="flex-1 p-6 flex flex-col">
+      <div className="bg-white rounded-lg shadow-lg overflow-hidden flex-1 flex flex-col">
+        {/* Título e Filtros de Tempo/Data */}
+        <div className="bg-gray-50 p-6 border-b border-gray-200">
+          <h2 className="text-2xl font-bold text-primary mb-4">COTAÇÕES</h2>
+          <div className="flex flex-wrap items-center mb-4 justify-between">
+            {/* Botões de Filtro de Tempo */}
+            <div className="flex rounded-md  overflow-hidden gap-4">
+              {["Hoje", "7 Dias", "15 Dias", "30 Dias", "Todos"].map(
+                (filter) => (
+                  <button
+                    key={filter}
+                    onClick={() => applyTimeFilter(filter)}
+                    className={`rounded-md border px-4 py-2 text-sm font-medium ${
+                      timeFilter === filter
+                        ? "bg-primary text-white"
+                        : "bg-white text-gray-700 hover:bg-gray-100"
+                    }`}
+                  >
+                    {filter}
+                  </button>
+                )
+              )}
+            </div>
+
+            <div className="flex items-center gap-4">
+              {/* Filtro Dropdown e Data Inputs */}
+              <select
+                className="border border-gray-300 rounded-md px-4 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-secondary"
+                value={statusFilter}
+                onChange={(e) => {
+                  setStatusFilter(e.target.value);
+                  setTimeFilter("Todos");
+                }}
+              >
+                <option value="">Filtrar</option>
+                {STATUS_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="date"
+                className="border border-gray-300 rounded-md px-4 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-secondary"
+                value={dateStart}
+                onChange={(e) => {
+                  setDateStart(e.target.value);
+                  setTimeFilter("Todos");
+                }}
+                title="Data inicial"
+              />
+              <input
+                type="date"
+                className="border border-gray-300 rounded-md px-4 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-secondary"
+                value={dateEnd}
+                onChange={(e) => {
+                  setDateEnd(e.target.value);
+                  setTimeFilter("Todos");
+                }}
+                title="Data final"
+              />
+            </div>
           </div>
         </div>
-        <div className="flex flex-col sm:flex-row gap-4 mb-6 items-center">
-          <input
-            type="text"
-            placeholder="Buscar por nome, status, ID, e-mail, seguradora..." // Atualizado placeholder
-            className="flex-1 border border-primary rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-secondary"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-          <select
-            className="border border-primary rounded px-4 py-2"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-          >
-            {STATUS_OPTIONS.map((opt) => (
-              <option key={opt} value={opt}>
-                {opt}
-              </option>
-            ))}
-          </select>
-          <input
-            type="date"
-            className="border border-primary rounded px-4 py-2"
-            value={dateStart}
-            onChange={(e) => setDateStart(e.target.value)}
-            title="Data inicial"
-          />
-          <input
-            type="date"
-            className="border border-primary rounded px-4 py-2"
-            value={dateEnd}
-            onChange={(e) => setDateEnd(e.target.value)}
-            title="Data final"
-          />
-        </div>
-        <div className="overflow-x-auto rounded-lg border border-primary">
+
+        {/* Tabela de Cotações - Esta div precisa crescer para preencher o espaço */}
+        <div className="overflow-x-auto flex-1 justify-between">
           {loading ? (
-            <div className="text-center text-primary py-8">
+            <div className="text-center text-primary py-8 h-full flex items-center justify-center">
               Carregando cotações...
             </div>
           ) : cotacoesFiltradas.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-primary">
-              <span className="material-icons text-6xl mb-4 text-primary">
+            <div className="flex flex-col items-center justify-center py-16 text-gray-600 h-full">
+              <span className="material-icons text-6xl mb-4 text-gray-400">
                 inbox
               </span>
               <h3 className="text-xl font-semibold mb-2">
                 Ainda não existem cotações
               </h3>
-              <p className="mb-4 text-primary">
-                Clique em <span className="font-bold">Nova Cotação</span> para
+              <p className="mb-4 text-center">
+                Clique em <span className="font-bold">Novo Cálculo</span> para
                 criar sua primeira cotação!
               </p>
               <button
                 onClick={() => router.push("/formulario")}
                 className="bg-primary hover:bg-secondary text-white font-semibold rounded px-6 py-2 transition-colors"
               >
-                Nova Cotação
+                Novo Cálculo
               </button>
             </div>
           ) : (
-            <table className="min-w-full text-sm text-secondary">
-              <thead>
-                <tr className="bg-primary/10">
-                  <th className="px-4 py-2 text-left text-primary">ID</th>
-                  <th className="px-4 py-2 text-left text-primary">Cliente</th>
-                  <th className="px-4 py-2 text-left text-primary">Status</th>
-                  <th className="px-4 py-2 text-left text-primary">Data</th>
-                  <th className="px-4 py-2 text-left text-primary">Ações</th>
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/12">
+                    ID
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-3/12">
+                    Cliente
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-2/12">
+                    Data e hora
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-2/12">
+                    Status
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/12">
+                    Usuário
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-3/12">
+                    Opções
+                  </th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="bg-white divide-y divide-gray-200">
                 {cotacoesFiltradas.map((c) => (
-                  <tr
-                    className="border-b hover:bg-primary/5 transition-colors"
-                    key={c.id}
-                  >
-                    <td className="px-4 py-2 font-mono text-xs sm:text-sm text-primary">
-                      {c.cotacao?.quoteId || c.id}
+                  <tr key={c.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {c.cotacao?.quoteId?.substring(0, 8) ||
+                        c.id.substring(0, 8)}
                     </td>
-                    {/* Alterado para listar as seguradoras se houver mais de uma, ou o nome do locatário */}
-                    <td className="px-4 py-2 text-primary">
-                      {c.payload.participants[0].contact.name || "-"}
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <div className="font-medium">
+                        {c.payload?.participants?.[0]?.contact?.name || "N/A"}
+                      </div>
+                      <div className="text-gray-500">
+                        CPF:{" "}
+                        {c.payload?.participants?.[0]?.contact?.document ||
+                          "(XX) XXXX-XXXX"}
+                      </div>
+                      <div className="text-gray-500 text-xs">
+                        {c.payload?.property?.address
+                          ? `${c.payload.property.address.street}, ${
+                              c.payload.property.address.number || "s/n"
+                            }, ${c.payload.property.address.neighborhood}, ${
+                              c.payload.property.address.city
+                            }/${c.payload.property.address.state}`
+                          : "Logradouro, nº, Comp. Bairro, Cidade/UF"}
+                      </div>
                     </td>
-                     <td className="px-4 py-2">
-                      {c.allInsurerQuotes && c.allInsurerQuotes.length > 0 ? (
-                        <div className="flex gap-1 items-start"> {/* Flex-col para empilhar, items-start para alinhar à esquerda */}
-                          {c.allInsurerQuotes.map((insurer, idx) => (
-                            <span
-                              key={idx} 
-                              className={`inline-block px-2 py-1 gap-1 flex rounded border text-xs font-semibold ${
-                                STATUS_COLORS[insurer.status] || "bg-gray-100 text-gray-700 border-gray-200"
-                              }`}
-                            >
-                              
-                              {insurer.insurerName}. {insurer.status} 
-                            </span>
-                          ))}
-                        </div>
-                      ) : (                        
-                        <span
-                          className={`inline-block px-2 py-1 rounded border text-xs font-semibold ${
-                            STATUS_COLORS[c.cotacao?.status || ''] || "bg-gray-100 text-gray-700 border-gray-200"
-                          }`}
-                        >
-                          {c.cotacao?.status || "N/A"}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2 text-primary">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {formatDate(c.createdAt)}
                     </td>
-                    <td className="px-4 py-2 flex gap-6 items-center flex-wrap">
-                      <button
-                        onClick={() => handleVisualizar(c)}
-                        title="Visualizar"
-                        className="text-primary hover:text-secondary text-xs flex items-center gap-1"
-                      >
-                        <span className="material-icons text-base">
-                          visibility
-                        </span>
-                        Visualizar
-                      </button>
-                      <button
-                        onClick={() => handleVerDetalhes(c)}
-                        title="Detalhes"
-                        className="text-primary hover:text-secondary text-xs flex items-center gap-1"
-                      >
-                        <span className="material-icons text-base">info</span>
-                        Detalhes
-                      </button>
-                      <button
-                        onClick={() => handleRecalcular(c)}
-                        title="Recalcular"
-                        className="text-orange-600 hover:text-orange-900 text-xs flex items-center gap-1"
-                      >
-                        <span className="material-icons text-base">
-                          refresh
-                        </span>
-                        Recalcular
-                      </button>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex flex-col gap-1 items-start">
+                        {c.allInsurerQuotes && c.allInsurerQuotes.length > 0 ? (
+                          c.allInsurerQuotes.map((insurer, idx) => (
+                            <span
+                              key={idx}
+                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${
+                                STATUS_COLORS[insurer.status] ||
+                                "bg-gray-100 text-gray-700 border-gray-200"
+                              }`}
+                            >
+                              {insurer.insurerName}. {insurer.status}
+                            </span>
+                          ))
+                        ) : (
+                          <span
+                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${
+                              STATUS_COLORS[c.cotacao?.status || ""] ||
+                              "bg-gray-100 text-gray-700 border-gray-200"
+                            }`}
+                          >
+                            {c.cotacao?.status || "N/A"}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      Usuário
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => handleVisualizar(c)}
+                          title="Visualizar"
+                          className="text-gray-600 hover:text-primary transition-colors flex items-center gap-1 text-xs"
+                        >
+                          <FaEye className="text-base" />
+                        </button>
+                        <button
+                          onClick={() => handleVerDetalhes(c)}
+                          title="Detalhes"
+                          className="text-gray-600 hover:text-primary transition-colors flex items-center gap-1 text-xs"
+                        >
+                          <FaInfoCircle className="text-base" />
+                        </button>
+                        <button
+                          onClick={() => handleRecalcular(c)}
+                          title="Recalcular"
+                          className="text-gray-600 hover:text-orange-600 transition-colors flex items-center gap-1 text-xs"
+                        >
+                          <FaSyncAlt className="text-base" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -332,7 +457,28 @@ export default function DashboardPage() {
             </table>
           )}
         </div>
+        {/* Paginação */}
+        <div className="flex justify-end items-center px-6 py-4 bg-gray-50 border-t border-gray-200 mt-auto">
+          {" "}
+          <span className="text-sm text-gray-700 mr-4">
+            {/* Mostrando X de Y resultados */}
+          </span>
+          <div className="flex items-center space-x-2">
+            <button
+              className="p-2 rounded-full text-gray-500 hover:bg-gray-200 disabled:opacity-50"
+              disabled
+            >
+              <FaChevronLeft className="w-4 h-4" />
+            </button>
+            <span className="px-4 py-2 bg-primary text-white rounded-md text-sm font-semibold">
+              1
+            </span>
+            <button className="p-2 rounded-full text-gray-500 hover:bg-gray-200 disabled:opacity-50">
+              <FaChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
       </div>
-    </div>
+    </main>
   );
 }

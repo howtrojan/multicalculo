@@ -13,16 +13,14 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false); // Estado para visibilidade da senha
+  const [showPassword, setShowPassword] = useState(false);
   const router = useRouter();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    // Não precisa mais limpar o setError("") aqui
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      // Exibir toast de sucesso
       toast.success("Login realizado com sucesso!", {
         position: "top-right",
         autoClose: 5000,
@@ -35,7 +33,6 @@ export default function LoginPage() {
       });
       router.push("/dashboard");
     } catch (err: any) {
-      // Exibir toast de erro
       toast.error("E-mail ou senha inválidos. Tente novamente.", {
         position: "top-right",
         autoClose: 5000,
@@ -51,27 +48,19 @@ export default function LoginPage() {
     }
   };
 
-   return (
-    // O container pai precisa ser relative para que o filho absolute seja posicionado em relação a ele.
-    // Removido 'items-center justify-center' do pai para que o filho possa ser posicionado livremente.
-    <div className="min-h-screen bg-gradient-to-b from-secondary to-primary relative">
-      
-      <div className="bg-white rounded-xl shadow-lg p-8 w-full max-w-lg flex flex-col items-center
-                      absolute top-1/2 -translate-y-1/2 right-[45%] -translate-x-1/2 h-[70vh] justify-around">
-                      
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-secondary to-primary relative flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl shadow-lg p-8 w-full max-w-lg flex flex-col items-center gap-y-6">
         <Image
-          src={Logo} // Usa o objeto importado
+          src={Logo}
           alt="Logo SterSi Corretora de Seguros"
-          width={210} // Defina a largura explícita
-          height={210} // Defina a altura explícita (pode ser ajustada para manter a proporção)
-          className="mb-0" // Aplique as classes Tailwind restantes
+          width={210}
+          height={210}
+          className=""
         />
-        {/* Título centralizado */}
-        <h1 className="text-4xl font-bold text-primary mb-6 text-center">
+        <h1 className="text-4xl font-bold text-primary text-center">
           MULTICÁLCULO
-        </h1>{" "}
-        {/* Adicionado text-center explicitamente */}
-        {/* O formulário ocupa toda a largura do cartão (w-full) e seus itens internos são distribuídos verticalmente (flex-col gap-4) */}
+        </h1>
         <form onSubmit={handleLogin} className="w-full flex flex-col gap-6">
           <input
             type="email"
@@ -98,11 +87,7 @@ export default function LoginPage() {
               {showPassword ? <FaEyeSlash /> : <FaEye />}
             </button>
           </div>
-
-          {/* Esta div flex com justify-between faz com que "Lembrar-me" fique à esquerda e "Esqueci minha senha" à direita. */}
           <div className="flex justify-between items-center text-sm mt-1 w-full">
-            {" "}
-            {/* Adicionado w-full para garantir que o espaçamento funcione em toda a largura */}
             <div className="flex items-center text-gray-700">
               <input
                 type="checkbox"
@@ -117,22 +102,18 @@ export default function LoginPage() {
               Esqueci minha senha
             </a>
           </div>
-
           {error && (
             <div className="text-red-600 text-sm text-center mt-2">{error}</div>
           )}
-
-          {/* Botão "Acessar" que ocupa a largura total do formulário, e centralizado pelo flex-col items-center do pai */}
           <button
             type="submit"
-            className="pointer bg-primary hover:bg-secondary text-white font-semibold rounded px-4 py-2 transition-colors disabled:opacity-60 mt-4 w-full"
+            className="pointer bg-primary hover:bg-secondary text-white font-semibold rounded px-4 py-2 transition-colors disabled:opacity-60 w-full"
             disabled={loading}
           >
             {loading ? "Acessando..." : "Acessar"}
           </button>
         </form>
-        {/* Link "Registre-se" centralizado */}
-        <div className="mt-4 text-sm text-primary">
+        <div className="text-sm text-primary">
           <a href="/cadastro" className="hover:underline">
             Registre-se
           </a>
