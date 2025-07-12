@@ -7,6 +7,7 @@ import { FaEye, FaEyeSlash } from "react-icons/fa";
 import Logo from "../../../public/assets/logo.svg";
 import Image from 'next/image';
 import { toast } from "react-toastify";
+import axios from "axios";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -17,36 +18,52 @@ export default function LoginPage() {
   const router = useRouter();
 
   const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      await signInWithEmailAndPassword(auth, email, password);
-      toast.success("Login realizado com sucesso!", {
-        position: "top-right",
-        autoClose: 5000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-        progress: undefined,
-        theme: "colored",
-      });
-      router.push("/dashboard");
-    } catch (err: any) {
-      toast.error("E-mail ou senha inválidos. Tente novamente.", {
-        position: "top-right",
-        autoClose: 5000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-        progress: undefined,
-        theme: "colored",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+  e.preventDefault();
+  setLoading(true);
+
+  try {
+    // 1. Autentica no Firebase (cliente)
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    
+    // 2. Pega o token de ID do usuário autenticado
+    const idToken = await userCredential.user.getIdToken();
+    
+    // 3. Envia o token para a API criar o cookie de sessão no servidor
+    await axios.post('/api/auth/login', { idToken });
+
+    // 4. Mostra o toast de sucesso
+    toast.success("Login realizado com sucesso!", {
+      position: "top-right",
+      autoClose: 5000,
+      hideProgressBar: false,
+      closeOnClick: true,
+      pauseOnHover: true,
+      draggable: true,
+      progress: undefined,
+      theme: "colored",
+    });
+
+    // 5. Redireciona para o dashboard
+    router.push("/dashboard");
+
+  } catch (err: any) {
+    // Em caso de erro em qualquer etapa, mostra o toast de erro
+    toast.error("E-mail ou senha inválidos. Tente novamente.", {
+      position: "top-right",
+      autoClose: 5000,
+      hideProgressBar: false,
+      closeOnClick: true,
+      pauseOnHover: true,
+      draggable: true,
+      progress: undefined,
+      theme: "colored",
+    });
+    console.error("Falha no processo de login:", err);
+
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-secondary to-primary relative flex items-center justify-center p-4">

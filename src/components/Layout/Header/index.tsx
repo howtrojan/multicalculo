@@ -9,13 +9,15 @@ import { FaSearch, FaUserCircle } from "react-icons/fa"; // Ícone de usuário p
 import { signOut } from "firebase/auth"; // Importe o signOut
 import { auth } from "@/lib/firebase"; // Importe sua instância de auth
 import Link from "next/link";
+import axios from "axios";
 
 interface DashboardLayoutProps {
   children: ReactNode;
   pathname: string; // Isso está correto e foi adicionado anteriormente
 }
 
-export default function Header({ children, pathname }: DashboardLayoutProps) { // Recebe o pathname aqui
+export default function Header({ children, pathname }: DashboardLayoutProps) {
+  // Recebe o pathname aqui
   const router = useRouter();
   const [search, setSearch] = useState(""); // Estado para a busca no header
   const [isDropdownOpen, setIsDropdownOpen] = useState(false); // Estado para o dropdown do avatar
@@ -38,20 +40,23 @@ export default function Header({ children, pathname }: DashboardLayoutProps) { /
   }, []);
 
   const handleLogout = async () => {
-    setIsDropdownOpen(false); // Fecha o dropdown antes de sair
-    await signOut(auth);
+    await axios.post("/api/auth/logout");
+    // Opcional: deslogar do cliente também
+    await auth.signOut();
     router.push("/login");
   };
 
   // VAI ADICIONAR ESTA LINHA DE VOLTA
-  const isDashboardPage = pathname === '/dashboard'; // Ou o caminho exato da sua página Dashboard
+  const isDashboardPage = pathname === "/dashboard"; // Ou o caminho exato da sua página Dashboard
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-100">
       {/* Header Fixo - Topo da Página */}
       <header className="bg-white shadow-md py-3 px-6 flex items-center justify-between sticky top-0 z-50">
         <div className="flex items-center gap-4">
-          <Link href="/dashboard" className="flex items-center"> {/* Adicionei flex items-center para manter o alinhamento se houver texto/outros itens no Link */}
+          <Link href="/dashboard" className="flex items-center">
+            {" "}
+            {/* Adicionei flex items-center para manter o alinhamento se houver texto/outros itens no Link */}
             <Image
               src={Logo}
               alt="Logo SterSi Corretora de Seguros"
@@ -60,9 +65,11 @@ export default function Header({ children, pathname }: DashboardLayoutProps) { /
               className="h-10 w-10"
             />
           </Link>
+        </div>
+        <div>
           {/* Campo de Busca no Header - CONDICIONALMENTE RENDERIZADO */}
           {isDashboardPage && ( // <-- Adicione a condição aqui
-            <div className="relative flex items-center w-64">
+            <div className="relative flex items-center w-[350px] rounded-md">
               <input
                 type="text"
                 placeholder="BUSCAR"
@@ -72,7 +79,7 @@ export default function Header({ children, pathname }: DashboardLayoutProps) { /
               />
               <FaSearch className="absolute left-3 text-gray-400" />
             </div>
-          )} {/* <-- Feche a condição aqui */}
+          )}
         </div>
 
         {/* Botões do lado direito: Novo Cálculo e Avatar com Dropdown */}
@@ -86,8 +93,8 @@ export default function Header({ children, pathname }: DashboardLayoutProps) { /
               <span className="material-icons text-xl">add_circle_outline</span>
               NOVO CÁLCULO
             </button>
-          )} {/* <-- Feche a condição aqui */}
-
+          )}{" "}
+          {/* <-- Feche a condição aqui */}
           {/* Avatar com Dropdown */}
           <div className="relative" ref={dropdownRef}>
             <button

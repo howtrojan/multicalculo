@@ -10,9 +10,16 @@ interface InputCepProps {
   error?: string;
   required?: boolean;
   disabled?: boolean;
+  onAddressFound?: (address: {
+    city: string;
+    state: string;
+    street: string;
+    zipCode: string;
+  }) => void;
 }
 
 const InputCep: React.FC<InputCepProps> = ({
+  onAddressFound,
   label,
   name,
   value,
@@ -24,7 +31,7 @@ const InputCep: React.FC<InputCepProps> = ({
 }) => {
   return (
     <div className="flex flex-col gap-1 w-full">
-      <label htmlFor={name} className="text-sm font-medium text-cyan-900">
+      <label htmlFor={name} className="text-sm font-medium text-black">
         {label} {required && <span className="text-red-500">*</span>}
       </label>
       <input
@@ -38,8 +45,8 @@ const InputCep: React.FC<InputCepProps> = ({
         disabled={disabled}
         required={required}
         autoComplete="off"
-        className={`border rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-cyan-500 ${
-          error ? "border-red-400" : "border-cyan-300"
+        className={`border text-gray-400 rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-gray-200 ${
+          error ? "border-red-400" : "border-gray-300"
         }`}
       />
       {error && <span className="text-xs text-red-600 mt-1">{error}</span>}

@@ -33,7 +33,7 @@ const Input: React.FC<InputProps> = ({
 }) => {
   return (
     <div className="flex flex-col gap-1 w-full">
-      <label htmlFor={name} className="text-sm font-medium text-cyan-900">
+      <label htmlFor={name} className="text-sm font-medium text-black">
         {label} {required && <span className="text-red-500">*</span>}
       </label>
       <input
@@ -49,8 +49,8 @@ const Input: React.FC<InputProps> = ({
         max={max}
         step={step}
         placeholder={placeholder}
-        className={`border rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-cyan-500 ${
-          error ? "border-red-400" : "border-cyan-300"
+        className={`border text-gray-400 rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-gray-200 ${
+          error ? "border-red-400" : "border-gray-300"
         }`}
         aria-invalid={!!error}
         aria-describedby={error ? `${name}-error` : undefined}

@@ -13,7 +13,7 @@ import InputSelect from "../../components/formulario/InputSelect";
 import InputCurrency from "../../components/formulario/InputCurrency";
 import { Formik, Form } from "formik";
 import * as Yup from "yup";
-import { toast } from 'react-toastify'; // Importar a função toast
+import { toast } from "react-toastify"; // Importar a função toast
 
 export default function FormularioPage() {
   const router = useRouter();
@@ -107,9 +107,6 @@ export default function FormularioPage() {
 
   const handleSubmit = async (values: any, { setSubmitting }: any) => {
     setLoading(true);
-    // Limpeza de erros/sucessos anteriores não é mais necessária para o estado, o toast gerencia
-    // setError("");
-    // setSuccess("");
 
     let docIdToPass: string | null = null; // Variável para armazenar o ID do documento do Firestore
 
@@ -207,7 +204,10 @@ export default function FormularioPage() {
             coverages: [
               {
                 key: "basica",
-                insuredAmount: Number(values.aluguel) + Number(values.condominio) + Number(values.iptu),
+                insuredAmount:
+                  Number(values.aluguel) +
+                  Number(values.condominio) +
+                  Number(values.iptu),
               },
             ],
             riskLocation: {
@@ -225,7 +225,10 @@ export default function FormularioPage() {
             },
             expenses: [
               { description: "VALOR_ALUGUEL", value: Number(values.aluguel) },
-              { description: "VALOR_CONDOMINIO", value: Number(values.condominio) },
+              {
+                description: "VALOR_CONDOMINIO",
+                value: Number(values.condominio),
+              },
               { description: "VALOR_IPTU", value: Number(values.iptu) },
             ],
             planKey: values.planKey,
@@ -240,111 +243,60 @@ export default function FormularioPage() {
         },
       };
 
-      // Simula a chamada à API interna (mantido, mas não afeta os resultados fictícios diretamente)
-      const res = await axios.post("/api/fianca", payload);
+       const res = await axios.post("/api/fianca", payload);
+    
+    // 3. A RESPOSTA DA API (res.data) AGORA É O QUE IMPORTA!
+    //    Ela já contém o array com Pottencial, Porto Seguro, etc.
+    const quotesFromApi = res.data; 
 
-      // --- CRIAÇÃO DAS COTAÇÕES FICTÍCIAS PARA MÚLTIPLAS SEGURADORAS ---
-      const basePremium = Number(values.aluguel) * 0.05; // Exemplo de cálculo básico
+    // A variável 'fakeResults' que existia aqui foi REMOVIDA.
 
-      const fakeResults = [
-        {
-          insurerName: "Pottencial",
-          insurerLogo: "/images/logos/pottencial.svg", // Caminho para o logo
-          quoteId: `POT-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
-          status: "Em análise",
-          totalPremium: (basePremium * 1.05).toFixed(2), // Valor um pouco diferente
-          message: "Cotação Pottencial gerada com sucesso!",
-          plan: payload.riskObjects?.[0]?.planKey || "Basic",
-          tenantName: payload.participants?.[0]?.contact?.name || "João da Silva",
-          propertyAddress: payload.riskObjects?.[0]?.riskLocation?.address?.street || "Rua Exemplo, 123",
-          createdAt: new Date().toISOString(),
-        },
-        {
-          insurerName: "Porto Seguro",
-          insurerLogo: "/images/logos/porto.svg", // Caminho para o logo
-          quoteId: `POR-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
-          status: "Aceita", // Exemplo de status diferente
-          totalPremium: (basePremium * 1.10).toFixed(2),
-          message: "Sua cotação foi aceita pela Porto Seguro!",
-          plan: payload.riskObjects?.[0]?.planKey || "Basic",
-          tenantName: payload.participants?.[0]?.contact?.name || "João da Silva",
-          propertyAddress: payload.riskObjects?.[0]?.riskLocation?.address?.street || "Rua Exemplo, 123",
-          createdAt: new Date(new Date().setHours(new Date().getHours() - 1)).toISOString(), // Data um pouco diferente
-        },
-        {
-          insurerName: "Tokio Marine",
-          insurerLogo: "/images/logos/tokio.svg", // Caminho para o logo
-          quoteId: `TOK-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
-          status: "Pendente", // Exemplo de status diferente
-          totalPremium: (basePremium * 1.00).toFixed(2),
-          message: "Tokio Marine está analisando sua proposta.",
-          plan: payload.riskObjects?.[0]?.planKey || "Basic",
-          tenantName: payload.participants?.[0]?.contact?.name || "João da Silva",
-          propertyAddress: payload.riskObjects?.[0]?.riskLocation?.address?.street || "Rua Exemplo, 123",
-          createdAt: new Date(new Date().setDate(new Date().getDate() - 1)).toISOString(), // Data um pouco mais antiga
-        },
-      ];
+    // 4. Salva os dados no Firestore
+    const currentUser = auth.currentUser;
+    if (currentUser) {
+      try {
+        const docRef = await addDoc(collection(db, "cotacoes"), {
+          userId: currentUser.uid,
+          userEmail: currentUser.email || "email_nao_disponivel",
+          payload: payload, // Salva o payload original para referência
+          allInsurerQuotes: quotesFromApi, // << AQUI ESTÁ A MUDANÇA PRINCIPAL!
+          createdAt: serverTimestamp(),
+        });
+        
+        docIdToPass = docRef.id;
+        toast.success("Cotação enviada e salva com sucesso!", { theme: "colored" });
 
-      // --- LÓGICA PARA SALVAR NO FIREBASE FIRESTORE ---
-      const currentUser = auth.currentUser;
-      if (currentUser) {
-        try {
-          // Adiciona o documento contendo o payload original E o array de fakeResults
-          const docRef = await addDoc(collection(db, "cotacoes"), {
-            userId: currentUser.uid,
-            userEmail: currentUser.email || "email_nao_disponivel",
-            payload: payload, // Salva o payload completo original
-            allInsurerQuotes: fakeResults, // Salva o array de todas as cotações fictícias
-            createdAt: serverTimestamp(), // Adiciona o timestamp do servidor Firebase
-          });
-          docIdToPass = docRef.id; // Guarda o ID do documento
-          toast.success("Cotação enviada e salva com sucesso!", { theme: "colored" });
-        } catch (firebaseErr: unknown) {
-          let firebaseErrorMessage = "Erro ao salvar cotação no Firebase.";
-          if (firebaseErr instanceof Error) {
-            firebaseErrorMessage += `: ${firebaseErr.message}`;
-          }
-          console.error("Erro Firebase:", firebaseErrorMessage);
-          toast.error(firebaseErrorMessage, { theme: "colored" });
-          // Continua para mostrar o resultado local mesmo se o Firebase falhar
+      } catch (firebaseErr: unknown) {
+        let firebaseErrorMessage = "Erro ao salvar cotação no Firebase.";
+        if (firebaseErr instanceof Error) {
+          firebaseErrorMessage += `: ${firebaseErr.message}`;
         }
-      } else {
-        toast.error("Usuário não autenticado. Faça login novamente.", { theme: "colored" });
-        router.push("/login"); // Redireciona se não houver usuário logado
-        return; // Sai da função para evitar processamento adicional
+        console.error("Erro Firebase:", firebaseErrorMessage);
+        toast.error(firebaseErrorMessage, { theme: "colored" });
       }
-
-      // SEMPRE VAI PARA A PÁGINA DE RESULTADOS COM OS DADOS FICTÍCIOS
-      // Se um ID do Firestore foi salvo, usa ele. Caso contrário (e.g., erro no Firebase),
-      // a página de resultados terá que lidar com a falta do ID e, talvez, cair no estado de "nenhum resultado".
-      // Ou podemos salvar os fakeResults no localStorage como fallback.
-      if (docIdToPass) {
-          localStorage.setItem("lastCotacaoDocId", docIdToPass);
-      } else {
-          // Fallback: Se não conseguiu salvar no Firebase, ainda tenta mostrar os dados fictícios
-          // na página de resultados diretamente do localStorage.
-          // Note: Isso faria a página de resultados buscar do localStorage (antigo comportamento)
-          // se o Firebase falhar, mas a questão era sempre buscar do Firebase.
-          // O cenário mais seguro é que 'ResultadoPage' sempre tenta buscar do Firebase pelo ID.
-          // Se não houver ID, ela mostra "Nenhum resultado".
-          // Para "de qualquer maneira quero ir pra pagina de resultados com os dados ficticios",
-          // o ideal é que ResultadoPage tenha um fallback se o ID nao vier.
-          // Mas o pedido aqui é que a _FORMULARIO_PAGE_ sempre VÁ para RESULTADOS.
-      }
-      
-      router.push("/resultado");
-
-    } catch (err: unknown) { // Captura erros gerais (e.g., da chamada axios.post)
-      let errorMessage = "Erro inesperado ao enviar cotação. Verifique os dados.";
-      if (err instanceof Error) {
-        errorMessage += `: ${err.message}`;
-      }
-      toast.error(errorMessage, { theme: "colored" });
-    } finally {
-      setLoading(false);
-      setSubmitting(false);
+    } else {
+      toast.error("Usuário não autenticado. Faça login novamente.", { theme: "colored" });
+      router.push("/login");
+      return; 
     }
-  };
+
+    if (docIdToPass) {
+      localStorage.setItem("lastCotacaoDocId", docIdToPass);
+    }
+    
+    router.push("/resultado");
+
+  } catch (err: unknown) {
+    let errorMessage = "Erro inesperado ao enviar cotação.";
+    if (err instanceof Error) {
+      errorMessage += `: ${err.message}`;
+    }
+    toast.error(errorMessage, { theme: "colored" });
+  } finally {
+    setLoading(false);
+    setSubmitting(false);
+  }
+};
 
   // Função para preencher endereço do locatário via CEP (mantida)
   const handleTenantCep = (address: any) => {
@@ -370,9 +322,11 @@ export default function FormularioPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-cyan-900 to-cyan-600 flex items-center justify-center py-10">
-      <div className="w-4/5 mx-auto bg-white rounded-xl shadow-lg p-8">
-        <h2 className="text-2xl font-bold text-cyan-900 mb-6 text-center">Formulário: Fiança Locatícia</h2>
+    <div className="flex-1 p-6 flex flex-col bg-gradient-to-b from-secondary to-primary">
+      <div className="bg-white rounded-lg shadow-lg overflow-hidden flex-1 flex flex-col p-10">
+        <h2 className="text-2xl font-bold text-primary mb-6 text-start">
+          FORMULÁRIO
+        </h2>
         <Formik
           initialValues={initialValues}
           validationSchema={validationSchema}
@@ -381,14 +335,18 @@ export default function FormularioPage() {
           {({ values, errors, touched, setFieldValue }) => (
             <Form className="flex flex-col gap-6" autoComplete="off">
               {/* Período */}
-              <div>
-                <h3 className="font-semibold text-cyan-800 mb-2">Período da Apólice</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="p-6 border border-gray-300 rounded-lg shadow-lg">
+                <h3 className="font-bold text-primary mb-2 text-2xl">
+                  PERÍODO
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-10 gap-4">
                   <InputDate
                     label="Início"
                     name="policyPeriodStart"
                     value={values.policyPeriodStart}
-                    onChange={(e) => setFieldValue("policyPeriodStart", e.target.value)}
+                    onChange={(e) =>
+                      setFieldValue("policyPeriodStart", e.target.value)
+                    }
                     required
                     min={new Date().toISOString().split("T")[0]}
                   />
@@ -396,97 +354,268 @@ export default function FormularioPage() {
                     label="Fim"
                     name="policyPeriodEnd"
                     value={values.policyPeriodEnd}
-                    onChange={(e) => setFieldValue("policyPeriodEnd", e.target.value)}
+                    onChange={(e) =>
+                      setFieldValue("policyPeriodEnd", e.target.value)
+                    }
                     required
                     min={values.policyPeriodStart}
                   />
                 </div>
               </div>
               {/* Corretor e Proprietário */}
-              <div>
-                <h3 className="font-semibold text-cyan-800 mb-2">Corretor e Proprietário</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="p-6 border border-gray-300 rounded-lg shadow-lg">
+                <h3 className="font-bold text-primary mb-2 text-2xl">
+                  CORRETOR E PROPRIETARIO
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-6 gap-4">
+                  <div>
+                    <InputCpfCnpj
+                      label="CNPJ Proprietário"
+                      name="ownerCnpj"
+                      value={values.ownerCnpj}
+                      onChange={(e) =>
+                        setFieldValue("ownerCnpj", e.target.value)
+                      }
+                      required
+                    />
+                    <Input
+                      label="% Comissão Corretor"
+                      name="brokerCommission"
+                      value={values.brokerCommission}
+                      onChange={(e) =>
+                        setFieldValue("brokerCommission", e.target.value)
+                      }
+                      required
+                      type="number"
+                      min="0"
+                      max="100"
+                    />
+                  </div>
                   <InputCpfCnpj
                     label="CNPJ Corretor"
                     name="brokerCnpj"
                     value={values.brokerCnpj}
-                    onChange={(e) => setFieldValue("brokerCnpj", e.target.value)}
-                    required
-                  />
-                  <Input
-                    label="% Comissão Corretor"
-                    name="brokerCommission"
-                    value={values.brokerCommission}
-                    onChange={(e) => setFieldValue("brokerCommission", e.target.value)}
-                    required
-                    type="number"
-                    min="0"
-                    max="100"
-                  />
-                  <InputCpfCnpj
-                    label="CNPJ Proprietário"
-                    name="ownerCnpj"
-                    value={values.ownerCnpj}
-                    onChange={(e) => setFieldValue("ownerCnpj", e.target.value)}
+                    onChange={(e) =>
+                      setFieldValue("brokerCnpj", e.target.value)
+                    }
                     required
                   />
                 </div>
               </div>
               {/* Locatário */}
-              <div>
-                <h3 className="font-semibold text-cyan-800 mb-2">Locatário</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <InputCpfCnpj
-                    label="CPF/CNPJ Locatário"
-                    name="tenantCpf"
-                    value={values.tenantCpf}
-                    onChange={(e) => setFieldValue("tenantCpf", e.target.value)}
-                    required
-                  />
-                  <Input label="Nome Locatário" name="tenantName" value={values.tenantName} onChange={(e) => setFieldValue("tenantName", e.target.value)} required />
-                  <Input label="E-mail Locatário" name="tenantEmail" value={values.tenantEmail} onChange={(e) => setFieldValue("tenantEmail", e.target.value)} required type="email" />
-                  <Input label="Celular Locatário" name="tenantPhone" value={values.tenantPhone} onChange={(e) => setFieldValue("tenantPhone", e.target.value)} required type="tel" />
-                  <InputCep
-                    label="CEP"
-                    name="tenantZip"
-                    value={values.tenantZip}
-                    onChange={(e) => setFieldValue("tenantZip", e.target.value)}                    
-                    required
-                  />
-                  <Input label="Endereço" name="tenantAddress" value={values.tenantAddress} onChange={(e) => setFieldValue("tenantAddress", e.target.value)} required />
-                  <Input label="Número" name="tenantNumber" value={values.tenantNumber} onChange={(e) => setFieldValue("tenantNumber", e.target.value)} required />
-                  <Input label="Bairro" name="tenantDistrict" value={values.tenantDistrict} onChange={(e) => setFieldValue("tenantDistrict", e.target.value)} required />
-                  <Input label="Cidade" name="tenantCity" value={values.tenantCity} onChange={(e) => setFieldValue("tenantCity", e.target.value)} required />
-                  <Input label="Estado" name="tenantState" value={values.tenantState} onChange={(e) => setFieldValue("tenantState", e.target.value)} required />
+              <div className="p-6 border border-gray-200 rounded-lg shadow-lg">
+                <h3 className="font-bold text-primary mb-4 text-2xl">
+                  PRETENDENTE
+                </h3>
+
+                {/* Grid principal com 12 colunas para maior flexibilidade */}
+                <div className="grid grid-cols-1 sm:grid-cols-14 gap-x-4 gap-y-6">
+                  {/* --- LINHA 1: DADOS DE CONTATO --- */}
+                  <div className="sm:col-span-4">
+                    <InputCpfCnpj
+                      label="CPF/CNPJ Locatário"
+                      name="tenantCpf"
+                      value={values.tenantCpf}
+                      onChange={(e) =>
+                        setFieldValue("tenantCpf", e.target.value)
+                      }
+                      required
+                    />
+                  </div>
+
+                  <div className="sm:col-span-8">
+                    <Input
+                      label="Nome Locatário"
+                      name="tenantName"
+                      value={values.tenantName}
+                      onChange={(e) =>
+                        setFieldValue("tenantName", e.target.value)
+                      }
+                      required
+                    />
+                  </div>
+
+                  <div className="sm:col-span-7">
+                    <Input
+                      label="E-mail Locatário"
+                      name="tenantEmail"
+                      value={values.tenantEmail}
+                      onChange={(e) =>
+                        setFieldValue("tenantEmail", e.target.value)
+                      }
+                      required
+                      type="email"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-5">
+                    <Input
+                      label="Celular Locatário"
+                      name="tenantPhone"
+                      value={values.tenantPhone}
+                      onChange={(e) =>
+                        setFieldValue("tenantPhone", e.target.value)
+                      }
+                      required
+                      type="tel"
+                    />
+                  </div>
+
+                  {/* --- DIVISOR E DADOS DE ENDEREÇO --- */}
+                  {/* Este div ocupa a linha inteira, forçando os campos abaixo para uma nova linha */}
+                  <div className="sm:col-span-12">
+                    <div className="pt-4 border-t border-gray-200">
+                      {/* Grid aninhado apenas para os campos de endereço */}
+                      <div className="grid grid-cols-1 sm:grid-cols-12 gap-x-4 gap-y-6">
+                        {/* LINHA 2: Endereço (Parte 1) */}
+                        <div className="sm:col-span-3">
+                          <InputCep
+                            label="CEP"
+                            name="tenantZip"
+                            value={values.tenantZip}
+                            onChange={(e) =>
+                              setFieldValue("tenantZip", e.target.value)
+                            }
+                            required
+                          />
+                        </div>
+                        <div className="sm:col-span-6">
+                          <Input
+                            label="Endereço"
+                            name="tenantAddress"
+                            value={values.tenantAddress}
+                            onChange={(e) =>
+                              setFieldValue("tenantAddress", e.target.value)
+                            }
+                            required
+                          />
+                        </div>
+                        <div className="sm:col-span-3">
+                          <Input
+                            label="Número"
+                            name="tenantNumber"
+                            value={values.tenantNumber}
+                            onChange={(e) =>
+                              setFieldValue("tenantNumber", e.target.value)
+                            }
+                            required
+                          />
+                        </div>
+
+                        {/* LINHA 3: Endereço (Parte 2) */}
+                        <div className="sm:col-span-5">
+                          <Input
+                            label="Bairro"
+                            name="tenantDistrict"
+                            value={values.tenantDistrict}
+                            onChange={(e) =>
+                              setFieldValue("tenantDistrict", e.target.value)
+                            }
+                            required
+                          />
+                        </div>
+                        <div className="sm:col-span-4">
+                          <Input
+                            label="Cidade"
+                            name="tenantCity"
+                            value={values.tenantCity}
+                            onChange={(e) =>
+                              setFieldValue("tenantCity", e.target.value)
+                            }
+                            required
+                          />
+                        </div>
+                        <div className="sm:col-span-3">
+                          <Input
+                            label="Estado"
+                            name="tenantState"
+                            value={values.tenantState}
+                            onChange={(e) =>
+                              setFieldValue("tenantState", e.target.value)
+                            }
+                            required
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
               {/* Imóvel */}
-              <div>
-                <h3 className="font-semibold text-cyan-800 mb-2">Imóvel</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="p-6 border border-gray-300 rounded-lg shadow-lg">
+                <h3 className="font-bold text-primary mb-2 text-2xl">
+                  IMÓVEL
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-6 gap-4">
                   <InputCep
                     label="CEP"
                     name="propertyZip"
                     value={values.propertyZip}
-                    onChange={(e) => setFieldValue("propertyZip", e.target.value)}                    
+                    onChange={(e) =>
+                      setFieldValue("propertyZip", e.target.value)
+                    }
                     required
                   />
-                  <Input label="Endereço" name="propertyAddress" value={values.propertyAddress} onChange={(e) => setFieldValue("propertyAddress", e.target.value)} required />
-                  <Input label="Número" name="propertyNumber" value={values.propertyNumber} onChange={(e) => setFieldValue("propertyNumber", e.target.value)} required />
-                  <Input label="Bairro" name="propertyDistrict" value={values.propertyDistrict} onChange={(e) => setFieldValue("propertyDistrict", e.target.value)} required />
-                  <Input label="Cidade" name="propertyCity" value={values.propertyCity} onChange={(e) => setFieldValue("propertyCity", e.target.value)} required />
-                  <Input label="Estado" name="propertyState" value={values.propertyState} onChange={(e) => setFieldValue("propertyState", e.target.value)} required />
+                  <Input
+                    label="Endereço"
+                    name="propertyAddress"
+                    value={values.propertyAddress}
+                    onChange={(e) =>
+                      setFieldValue("propertyAddress", e.target.value)
+                    }
+                    required
+                  />
+                  <Input
+                    label="Número"
+                    name="propertyNumber"
+                    value={values.propertyNumber}
+                    onChange={(e) =>
+                      setFieldValue("propertyNumber", e.target.value)
+                    }
+                    required
+                  />
+                  <Input
+                    label="Bairro"
+                    name="propertyDistrict"
+                    value={values.propertyDistrict}
+                    onChange={(e) =>
+                      setFieldValue("propertyDistrict", e.target.value)
+                    }
+                    required
+                  />
+                  <Input
+                    label="Cidade"
+                    name="propertyCity"
+                    value={values.propertyCity}
+                    onChange={(e) =>
+                      setFieldValue("propertyCity", e.target.value)
+                    }
+                    required
+                  />
+                  <Input
+                    label="Estado"
+                    name="propertyState"
+                    value={values.propertyState}
+                    onChange={(e) =>
+                      setFieldValue("propertyState", e.target.value)
+                    }
+                    required
+                  />
                 </div>
               </div>
               {/* Contrato */}
-              <div>
-                <h3 className="font-semibold text-cyan-800 mb-2">Contrato</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="p-6 border border-gray-300 rounded-lg shadow-lg">
+                <h3 className="font-bold text-primary mb-2 text-2xl">
+                  CONTRATO
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-10 gap-4">
                   <InputDate
                     label="Início Contrato"
                     name="startLeaseContract"
                     value={values.startLeaseContract}
-                    onChange={(e) => setFieldValue("startLeaseContract", e.target.value)}
+                    onChange={(e) =>
+                      setFieldValue("startLeaseContract", e.target.value)
+                    }
                     required
                     min={new Date().toISOString().split("T")[0]}
                   />
@@ -494,25 +623,51 @@ export default function FormularioPage() {
                     label="Fim Contrato"
                     name="endLeaseContract"
                     value={values.endLeaseContract}
-                    onChange={(e) => setFieldValue("endLeaseContract", e.target.value)}
+                    onChange={(e) =>
+                      setFieldValue("endLeaseContract", e.target.value)
+                    }
                     required
                     min={values.startLeaseContract}
                   />
                 </div>
               </div>
               {/* Valores */}
-              <div>
-                <h3 className="font-semibold text-cyan-800 mb-2">Valores</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <InputCurrency label="Valor do aluguel" name="aluguel" value={values.aluguel} onChange={(e) => setFieldValue("aluguel", e.target.value)} required />
-                  <InputCurrency label="Valor do condomínio" name="condominio" value={values.condominio} onChange={(e) => setFieldValue("condominio", e.target.value)} required />
-                  <InputCurrency label="Valor do IPTU" name="iptu" value={values.iptu} onChange={(e) => setFieldValue("iptu", e.target.value)} required />
+              <div className="p-6 border border-gray-300 rounded-lg shadow-lg">
+                <h3 className="font-bold text-primary mb-2 text-2xl">
+                  PRÊMIO
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-8 gap-4">
+                  <InputCurrency
+                    label="Valor do aluguel"
+                    name="aluguel"
+                    value={values.aluguel}
+                    onChange={(e) => setFieldValue("aluguel", e.target.value)}
+                    required
+                  />
+                  <InputCurrency
+                    label="Valor do condomínio"
+                    name="condominio"
+                    value={values.condominio}
+                    onChange={(e) =>
+                      setFieldValue("condominio", e.target.value)
+                    }
+                    required
+                  />
+                  <InputCurrency
+                    label="Valor do IPTU"
+                    name="iptu"
+                    value={values.iptu}
+                    onChange={(e) => setFieldValue("iptu", e.target.value)}
+                    required
+                  />
                 </div>
               </div>
               {/* Plano e Pagamento */}
-              <div>
-                <h3 className="font-semibold text-cyan-800 mb-2">Plano e Pagamento</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="p-6 border border-gray-300 rounded-lg shadow-lg">
+                <h3 className="font-bold text-primary mb-2 text-2xl">
+                  PAGAMENTO
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-8 gap-4">
                   <InputSelect
                     label="Plano"
                     name="planKey"
@@ -529,7 +684,9 @@ export default function FormularioPage() {
                     label="Parcelas"
                     name="installments"
                     value={values.installments}
-                    onChange={(e) => setFieldValue("installments", e.target.value)}
+                    onChange={(e) =>
+                      setFieldValue("installments", e.target.value)
+                    }
                     required
                     type="number"
                     min="1"
@@ -539,7 +696,9 @@ export default function FormularioPage() {
                     label="Tipo de Pagamento"
                     name="paymentType"
                     value={values.paymentType}
-                    onChange={(e) => setFieldValue("paymentType", e.target.value)}
+                    onChange={(e) =>
+                      setFieldValue("paymentType", e.target.value)
+                    }
                     required
                     options={[
                       { value: "Invoice", label: "Fatura" },
@@ -548,11 +707,12 @@ export default function FormularioPage() {
                   />
                 </div>
               </div>
-              {/* Removido os divs de erro e sucesso, as mensagens serão via Toast */}
-              {/* {error && <div className="text-red-600 text-sm text-center">{error}</div>}
-              {success && <div className="text-green-600 text-sm text-center">{success}</div>} */}
-              <button type="submit" className="bg-cyan-700 hover:bg-cyan-800 text-white font-semibold rounded px-4 py-2 transition-colors self-end" disabled={loading}>
-                {loading ? "Enviando..." : "Enviar Cotação"}
+              <button
+                type="submit"
+                className="bg-primary hover:bg-secondary text-white font-semibold rounded px-6 py-4 transition-colors self-end"
+                disabled={loading}
+              >
+                {loading ? "Cotando..." : "Enviar Cotação"}
               </button>
             </Form>
           )}

@@ -1,11 +1,12 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Image from 'next/image';
+import Image from "next/image"; // Importe o componente Image
 import { db } from "@/lib/firebase";
 import { doc, getDoc, Timestamp } from "firebase/firestore";
+import { FaCopy, FaPrint, FaTrashAlt } from "react-icons/fa";
 
-// --- Interfaces de Tipagem ---
+// --- Interfaces de Tipagem (sem alterações) ---
 interface InsurerQuote {
   insurerName: string;
   insurerLogo: string;
@@ -14,224 +15,260 @@ interface InsurerQuote {
   totalPremium: string;
   message?: string;
   plan?: string;
-  tenantName?: string;
-  propertyAddress?: string;
-  createdAt?: string;
 }
 
 interface FirestoreCotacaoDoc {
-    cotacao?: any;
-    payload?: any;
-    allInsurerQuotes: InsurerQuote[];
-    userId: string;
-    userEmail: string;
-    createdAt: Timestamp;
+  payload: {
+    participants: {
+      contact: {
+        name: string;
+        documentNumber: string;
+      };
+    }[];
+    riskObjects: {
+      occupation: string; // Usado para "Finalidade"
+      type: string; // Poderia ser usado para "Tipo"
+      riskLocation: {
+        address: {
+          zipCode: string;
+          state: string;
+          city: string;
+          street: string;
+        };
+      };
+    }[];
+    commissionedAgents: {
+      commissionPercentage: number;
+    }[];
+    policyPeriodStart: string;
+  };
+  allInsurerQuotes: InsurerQuote[];
+  userId: string;
+  userEmail: string;
+  createdAt: Timestamp;
 }
 
 export default function ResultadoPage() {
-  const [cotacoes, setCotacoes] = useState<InsurerQuote[] | null>(null);
+  const [cotacaoDoc, setCotacaoDoc] = useState<FirestoreCotacaoDoc | null>(
+    null
+  );
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-
   const router = useRouter();
 
   useEffect(() => {
-    const fetchCotacoes = async () => {
-      console.log("1. [ResultadoPage] Iniciando fetchCotacoes. Loading = true.");
+    const fetchCotacaoDoc = async () => {
       setLoading(true);
-      setError(null);
-      const lastCotacaoDocId = localStorage.getItem("lastCotacaoDocId");
-      console.log("2. [ResultadoPage] lastCotacaoDocId do localStorage:", lastCotacaoDocId);
+      const docId = localStorage.getItem("lastCotacaoDocId");
 
-      if (!lastCotacaoDocId) {
-        console.log("3. [ResultadoPage] ERRO: ID de cotação não encontrado no localStorage.");
-        setError("Nenhum ID de cotação encontrado no armazenamento local. Por favor, faça uma nova cotação.");
+      if (!docId) {
+        setError("Nenhum ID de cotação encontrado.");
         setLoading(false);
-        setCotacoes([]);
         return;
       }
 
       try {
-        const docRef = doc(db, "cotacoes", lastCotacaoDocId);
-        console.log("4. [ResultadoPage] Tentando buscar documento do Firestore com ID:", lastCotacaoDocId);
-        
-        // --- ADIÇÃO DO TIMEOUT PARA DIAGNÓSTICO ---
-        const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Tempo limite excedido ao buscar cotação do Firebase (10s).')), 10000)
-        );
-
-        const docSnap = await Promise.race([
-          getDoc(docRef),
-          timeoutPromise
-        ]);
-        console.log("5. [ResultadoPage] getDoc (ou timeout) finalizado.");
+        const docRef = doc(db, "cotacoes", docId);
+        const docSnap = await getDoc(docRef);
 
         if (docSnap.exists()) {
-          console.log("6. [ResultadoPage] Documento existe no Firestore.");
-          const data = docSnap.data() as FirestoreCotacaoDoc;
-          if (data.allInsurerQuotes && Array.isArray(data.allInsurerQuotes)) {
-            setCotacoes(data.allInsurerQuotes);
-            console.log("7. [ResultadoPage] Cotações definidas. Dados carregados:", data.allInsurerQuotes);
-          } else {
-            setError("Dados de cotação de seguradoras não encontrados ou em formato incorreto no documento do Firebase.");
-            setCotacoes([]);
-            console.log("8. [ResultadoPage] ERRO: Dados de seguradoras ausentes ou incorretos.");
-          }
+          setCotacaoDoc(docSnap.data() as FirestoreCotacaoDoc);
         } else {
-          setError("Documento de cotação não encontrado no Firebase com o ID fornecido.");
-          setCotacoes([]);
-          console.log("9. [ResultadoPage] ERRO: Documento não existe para o ID.");
+          setError("Documento de cotação não encontrado.");
         }
-      } catch (err: unknown) {
-        let errorMessage = "Erro ao buscar cotação do Firebase.";
-        if (err instanceof Error) {
-          errorMessage += `: ${err.message}`;
-        } else if (typeof err === 'string') {
-          errorMessage += `: ${err}`;
-        }
-        console.error("10. [ResultadoPage] ERRO CAPTURADO:", errorMessage, err);
-        setError(errorMessage);
-        setCotacoes([]);
+      } catch (err) {
+        setError("Erro ao buscar os dados da cotação.");
+        console.error(err);
       } finally {
         setLoading(false);
-        console.log("11. [ResultadoPage] fetchCotacoes finalizado. Loading = false.");
       }
     };
 
-    fetchCotacoes();
+    fetchCotacaoDoc();
   }, []);
 
-  // Função para formatar a data
-  const formatDate = (date: Timestamp | string | undefined): string => {
-    if (!date) return "-";
-    try {
-      if (typeof window === "undefined") return "-";
-      
-      let d: Date;
-      if (typeof date === "string") {
-        d = new Date(date);
-      } else if (date instanceof Timestamp) {
-        d = date.toDate();
-      } else {
-        return "-";
-      }
+  // O resto do seu código (estados de loading/error, etc.) permanece o mesmo...
 
-      if (isNaN(d.getTime())) {
-        console.warn("Data inválida recebida para formatação:", date);
-        return "-";
-      }
-
-      return d.toLocaleString();
-    } catch (e) {
-      console.error("Erro ao formatar data:", e);
-      return "-";
-    }
-  };
-
-
-  // Renderização condicional com base nos estados
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-cyan-900 to-cyan-600">
-        <div className="bg-white rounded-xl shadow-lg p-8 w-full max-w-md text-center">
-          <h2 className="text-2xl font-bold text-cyan-900 mb-4">Carregando resultados...</h2>
-          <p className="text-cyan-600">Buscando cotações no Firebase.</p>
-        </div>
+      <div className="flex-1 p-6 flex items-center justify-center bg-gradient-to-b from-secondary to-primary">
+        <p className="text-white text-xl">Carregando resultados...</p>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-cyan-900 to-cyan-600">
-        <div className="bg-white rounded-xl shadow-lg p-8 w-full max-w-md text-center">
-          <h2 className="text-2xl font-bold text-red-600 mb-4">Erro ao carregar resultados</h2>
-          <p className="text-gray-700 mb-4">{error}</p>
-          <button onClick={() => router.push("/dashboard")} className="mt-4 bg-cyan-700 hover:bg-cyan-800 text-white font-semibold rounded px-4 py-2">Voltar ao Dashboard</button>
+      <div className="flex-1 p-6 flex items-center justify-center bg-gradient-to-b from-secondary to-primary">
+        <div className="bg-white p-8 rounded-lg shadow-xl text-center">
+          <h2 className="text-2xl font-bold text-red-600 mb-4">
+            Ocorreu um Erro
+          </h2>
+          <p className="text-gray-700">{error}</p>
+          <button
+            onClick={() => router.push("/dashboard")}
+            className="mt-6 bg-primary hover:bg-secondary text-white font-semibold rounded px-6 py-2"
+          >
+            Voltar
+          </button>
         </div>
       </div>
     );
   }
 
-  if (!cotacoes || cotacoes.length === 0) {
+  if (!cotacaoDoc) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-cyan-900 to-cyan-600">
-        <div className="bg-white rounded-xl shadow-lg p-8 w-full max-w-md text-center">
-          <h2 className="text-2xl font-bold text-cyan-900 mb-4">Nenhum resultado encontrado</h2>
-          <p className="text-gray-700 mb-4">Por favor, faça uma nova cotação.</p>
-          <button onClick={() => router.push("/dashboard")} className="mt-4 bg-cyan-700 hover:bg-cyan-800 text-white font-semibold rounded px-4 py-2">Voltar ao Dashboard</button>
-        </div>
+      <div className="flex-1 p-6 flex items-center justify-center bg-gradient-to-b from-secondary to-primary">
+        <p className="text-white text-xl">Nenhuma cotação encontrada.</p>
       </div>
     );
   }
+
+  const segurado = cotacaoDoc.payload?.participants?.[0]?.contact;
+  const imovel = cotacaoDoc.payload?.riskObjects?.[0];
+  const comissao = cotacaoDoc.payload?.commissionedAgents?.find(
+    (a) => a.commissionPercentage
+  )?.commissionPercentage;
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-cyan-900 to-cyan-600 flex flex-col items-center justify-center py-10 px-4">
-      <h2 className="text-3xl font-bold text-white mb-8 text-center">Resultados da Cotação</h2>
+    <main className="flex-1 p-4 sm:p-6 flex flex-col bg-gradient-to-b from-secondary to-primary">
       
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl w-full">
-        {cotacoes.map((cotacao, index) => (
-          <div key={cotacao.quoteId || index} className="bg-white rounded-xl shadow-lg p-6 flex flex-col">
-            <div className="flex items-center mb-4 border-b pb-4">
-              <Image
-                src={cotacao.insurerLogo}
-                alt={`${cotacao.insurerName} Logo`}
-                width={80}
-                height={80}
-                className="mr-4 rounded-full"
-              />
-              <h3 className="text-xl font-bold text-cyan-900">{cotacao.insurerName}</h3>
+        
+
+        {/* Box de Informações Gerais com TODOS os campos do Figma */}
+        <div className="bg-white rounded-lg shadow-lg overflow-hidden flex-1 flex flex-col p-10">
+          <h2 className="text-2xl font-bold text-primary mb-6 text-start">
+          RESULTADOS
+        </h2>
+        <div className="p-6 border border-gray-300 rounded-lg shadow-lg">
+          <div className="border rounded-md p-4 grid grid-cols-12 gap-x-6 gap-y-4 text-sm">
+            {/* Linha 1 */}
+            <div className="col-span-12 sm:col-span-6 md:col-span-5">
+              <p className="font-semibold text-gray-500">Segurado</p>
+              <p className="text-gray-800 truncate">{segurado?.name || "-"}</p>
+            </div>
+            <div className="col-span-6 sm:col-span-3 md:col-span-3">
+              <p className="font-semibold text-gray-500">CPF</p>
+              <p className="text-gray-800">{segurado?.documentNumber || "-"}</p>
+            </div>
+            <div className="col-span-6 sm:col-span-3 md:col-span-4">
+              <p className="font-semibold text-gray-500">Vigência</p>
+              <p className="text-gray-800">
+                {cotacaoDoc.payload?.policyPeriodStart || "-"}
+              </p>
             </div>
 
-            {cotacao.message && (
-              <div className="mb-3 text-sm text-green-700 font-semibold">{cotacao.message}</div>
-            )}
-
-            <div className="mb-3">
-              <div className="text-cyan-800 font-semibold">ID da Cotação:</div>
-              <div className="text-cyan-700 break-all text-sm">{cotacao.quoteId}</div>
+            {/* Linha 2 */}
+            <div className="col-span-6 sm:col-span-3">
+              <p className="font-semibold text-gray-500">Finalidade</p>
+              <p className="text-gray-800">{imovel?.occupation || "-"}</p>
             </div>
-            <div className="mb-3">
-              <div className="text-cyan-800 font-semibold">Status:</div>
-              <div className="text-cyan-700 font-medium">{cotacao.status}</div>
+            <div className="col-span-6 sm:col-span-3">
+              <p className="font-semibold text-gray-500">Tipo</p>
+              <p className="text-gray-800">-</p>{" "}
+              {/* Dado não encontrado no payload */}
             </div>
-            <div className="mb-3">
-              <div className="text-cyan-800 font-semibold">Valor Total:</div>
-              <div className="text-cyan-700 text-lg font-bold">{cotacao.totalPremium ? `R$ ${cotacao.totalPremium}` : "-"}</div>
+            <div className="col-span-6 sm:col-span-3">
+              <p className="font-semibold text-gray-500">Local</p>
+              <p className="text-gray-800">-</p>{" "}
+              {/* Dado não encontrado no payload */}
+            </div>
+            <div className="col-span-6 sm:col-span-3">
+              <p className="font-semibold text-gray-500">CEP</p>
+              <p className="text-gray-800">
+                {imovel?.riskLocation.address.zipCode || "-"}
+              </p>
             </div>
 
-            {cotacao.plan && (
-              <div className="mb-3">
-                <div className="text-cyan-800 font-semibold">Plano:</div>
-                <div className="text-cyan-700 text-sm">{cotacao.plan}</div>
-              </div>
-            )}
-            {cotacao.tenantName && (
-              <div className="mb-3">
-                <div className="text-cyan-800 font-semibold">Locatário:</div>
-                <div className="text-cyan-700 text-sm">{cotacao.tenantName}</div>
-              </div>
-            )}
-            {cotacao.propertyAddress && (
-              <div className="mb-3">
-                <div className="text-cyan-800 font-semibold">Endereço do Imóvel:</div>
-                <div className="text-cyan-700 text-sm">{cotacao.propertyAddress}</div>
-              </div>
-            )}
-            {cotacao.createdAt && (
-              <div className="mb-3">
-                <div className="text-cyan-800 font-semibold">Data da Cotação:</div>
-                <div className="text-cyan-700 text-sm">{formatDate(cotacao.createdAt)}</div>
-              </div>
-            )}
-
-            <div className="flex flex-col sm:flex-row gap-2 mt-auto pt-4 border-t">
-              <button onClick={() => router.push("/dashboard")} className="bg-cyan-700 hover:bg-cyan-800 text-white font-semibold rounded px-4 py-2 flex-grow">Voltar ao Dashboard</button>
-              <button onClick={() => alert(`Você selecionou a cotação ${cotacao.quoteId} da ${cotacao.insurerName}`)} className="bg-green-600 hover:bg-green-700 text-white font-semibold rounded px-4 py-2 flex-grow">Selecionar</button>
+            {/* Linha 3 */}
+            <div className="col-span-12 sm:col-span-6">
+              <p className="font-semibold text-gray-500">Logradouro</p>
+              <p className="text-gray-800 truncate">
+                {imovel?.riskLocation.address.street || "-"}
+              </p>
+            </div>
+            <div className="col-span-6 sm:col-span-3">
+              <p className="font-semibold text-gray-500">Cidade</p>
+              <p className="text-gray-800">
+                {imovel?.riskLocation.address.city || "-"}
+              </p>
+            </div>
+            <div className="col-span-6 sm:col-span-3">
+              <p className="font-semibold text-gray-500">UF</p>
+              <p className="text-gray-800">
+                {imovel?.riskLocation.address.state || "-"}
+              </p>
             </div>
           </div>
-        ))}
+          </div>
+        </div>
+
+        {/* Tabela de Resultados */}
+        
+        <div className="bg-white rounded-lg shadow-lg overflow-hidden flex-1 flex flex-col p-10">
+          <div className="p-6 border border-gray-300 rounded-lg shadow-lg">
+          {/* Cabeçalho da Tabela */}
+          <div className="flex bg-gray-50 p-3 rounded-t-md border-b text-xs font-bold text-gray-600 uppercase">
+            <div className="w-3/12 pl-2">Seguradora</div>
+            <div className="w-2/12">Prêmio</div>
+            <div className="w-1/12">Franquia</div>
+            <div className="w-1/12">Comissão</div>
+            <div className="w-2/12">Cobertura</div>
+            <div className="w-2/12">Cotação</div>
+            <div className="w-1/12 text-center">Opções</div>
+          </div>
+
+          {/* Corpo da Tabela */}
+        <div className="border-l border-r border-b rounded-b-md divide-y divide-gray-200">
+          {cotacaoDoc.allInsurerQuotes.map((quote, index) => (
+            <div key={index} className="flex items-center p-3 text-sm text-gray-700 min-h-[60px]">
+              
+              {/* Coluna da Seguradora (sempre visível) */}
+              <div className="w-3/12 font-semibold text-primary flex items-center">
+                <Image
+                  src={quote.insurerLogo}
+                  alt={`${quote.insurerName} Logo`}
+                  width={24}
+                  height={24}
+                  className="mr-3 rounded-full object-contain"
+                />
+                {quote.insurerName}
+              </div>
+
+              {/* AQUI ESTÁ A LÓGICA CONDICIONAL */}
+              {quote.status === "Recusado" ? (
+                // SE RECUSADO: Mostra a mensagem em vermelho
+                <div className="flex-grow flex items-center justify-center px-4">
+                  <p className="text-red-600 font-semibold">{quote.message || "Cotação recusada"}</p>
+                </div>
+              ) : (
+                // CASO CONTRÁRIO: Mostra todas as outras colunas
+                <>
+                  <div className="w-2/12">
+                    <p className="font-bold text-gray-800">
+                      {quote.totalPremium ? `R$ ${quote.totalPremium}` : "-"}
+                    </p>
+                    {quote.totalPremium && <p className="text-xs text-gray-500">10x sem juros</p>}
+                  </div>
+                  <div className="w-1/12">-</div>
+                  <div className="w-1/12">{comissao ? `${comissao}%` : "-"}</div>
+                  <div className="w-2/12">-</div>
+                  <div className="w-2/12 text-gray-500 truncate" title={quote.quoteId || ""}>
+                    {quote.quoteId || "-"}
+                  </div>
+                  <div className="w-1/12 flex justify-center items-center gap-4 text-gray-500">
+                    <button title="Copiar" className="hover:text-primary"><FaCopy /></button>
+                    <button title="Imprimir" className="hover:text-primary"><FaPrint /></button>
+                    <button title="Excluir" className="hover:text-red-500"><FaTrashAlt /></button>
+                  </div>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
+  </main>
   );
 }
+
