@@ -1,43 +1,47 @@
 import { getFilteredCotacoes } from "@/services/cotacaoService";
 import DashboardClient from "@/components/dashboard/DashboardClient";
-import { adminAuth } from "@/lib/firebase-admin"; // 1. O auth do admin SDK é o único que precisamos aqui.
+import { adminAuth } from "@/lib/firebase-admin";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 
-// Função para obter o ID do usuário logado no servidor
+// Força a página a ser sempre dinâmica
+export const dynamic = "force-dynamic";
+
 async function getUserId() {
-  try {
-    // 2. Corrigido: cookies() não é uma promise, não precisa de await.
-    const sessionCookie = (await cookies()).get("session")?.value || "";
+  try {
+    const sessionCookie = (await cookies()).get("session")?.value || "";
+    if (!sessionCookie) return null;
     
-    // Se não houver cookie, não há usuário.
-    if (!sessionCookie) {
-      return null;
-    }
-
-    // 3. Corrigido: Usar 'adminAuth' para verificar o cookie, não 'auth'.
-    const decodedClaims = await adminAuth.verifySessionCookie(sessionCookie, true);
-    return decodedClaims.uid;
-  } catch (error) {
-    // Se o cookie for inválido ou expirado, o catch tratará o erro.
-    console.log("Não foi possível verificar o cookie de sessão.");
-    return null;
-  }
+    const decodedClaims = await adminAuth.verifySessionCookie(sessionCookie, true);
+    return decodedClaims.uid;
+  } catch {
+    return null;
+  }
 }
 
-export default async function DashboardPage({ searchParams }: {
-  searchParams: { status?: string; dateStart?: string; dateEnd?: string };
-}) {
-  const userId = await getUserId();
+export default async function DashboardPage() {
+  const userId = await getUserId();
+  if (!userId) {
+    redirect("/login");
+  }
 
-  // Se não houver usuário logado, redireciona para o login
-  if (!userId) {
-    redirect("/login");
-  }
+  // Extrair manualmente os search params da URL
+  const headersList = headers();
+  const url = (await headersList).get("x-url") || (await headersList).get("referer") || "";
+  const parsedUrl = new URL(url || " "); 
 
-  // Chama o service para buscar os dados JÁ FILTRADOS
-  const cotacoes = await getFilteredCotacoes(userId, searchParams);
+  const status = parsedUrl.searchParams.get("status") || undefined;
+  const dateStart = parsedUrl.searchParams.get("dateStart") || undefined;
+  const dateEnd = parsedUrl.searchParams.get("dateEnd") || undefined;
 
-  // Passa os dados pré-filtrados para o componente de cliente
-  return <DashboardClient initialCotacoes={JSON.parse(JSON.stringify(cotacoes))} />;
+  const cotacoes = await getFilteredCotacoes(userId, {
+    status,
+    dateStart,
+    dateEnd,
+  });
+
+  return (
+    <DashboardClient initialCotacoes={JSON.parse(JSON.stringify(cotacoes))} />
+  );
 }
