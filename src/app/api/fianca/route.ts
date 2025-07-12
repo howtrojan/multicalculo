@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
 // --- Configurações e Constantes ---
-const client_id = process.env.POTTENCIAL_CLIENT_ID || "44b0d67b-ed47-4761-a673-cff85db93fb9";
-const client_secret = process.env.POTTENCIAL_CLIENT_SECRET || "a21bd748-4bdc-488f-a4a5-4873db76176b";
+const client_id = process.env.POTTENCIAL_CLIENT_ID || "";
+const client_secret = process.env.POTTENCIAL_CLIENT_SECRET || "";
 
 const TOKEN_COOKIE = "pottencial_access_token";
 const EXPIRES_COOKIE = "pottencial_token_exp";
